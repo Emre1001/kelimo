@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kelimo · Sprachen lernen, komplett offline</title>
+<meta name="description" content="Kelimo ist ein KI-Sprachtutor, der komplett auf deinem Android-Handy läuft. Kein Internet, keine Konten, kein Abo. Deutsch lernen für Türkischsprachige und mehr.">
+<meta name="theme-color" content="#F5F3EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D0E11" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Kelimo · Sprachen lernen, komplett offline">
+<meta property="og:description" content="Ein KI-Sprachtutor, der nur auf deinem Handy läuft. Kein Server sieht je ein Wort.">
+<meta property="og:image" content="assets/shots/path.webp">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%232E5BE6'/%3E%3Cpath fill='white' d='M22 16h8v14l13-14h10L38 32l16 16H43L30 35v13h-8z'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #F5F3EE; --surface: #FFFFFF; --surface2: #EDEAE3; --line: rgba(21,23,28,.10);
+  --ink: #15171C; --ink2: #55585F; --ink3: #8D9097;
+  --accent: #2E5BE6; --accent-ink: #FFFFFF; --accent-soft: #E3E9FC;
+  --good: #178A5B; --good-soft: #DDF2E7; --bad: #D1443B; --bad-soft: #FBE3E0; --warm: #E59A1A; --warm-soft: #FCEFD6;
+  --der: #2E5BE6; --die: #D1443B; --das: #178A5B;
+  --shadow: 0 1px 2px rgba(21,23,28,.06), 0 12px 40px -12px rgba(21,23,28,.18);
+  --spring: cubic-bezier(.22,1,.36,1);
+  --r: 22px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D0E11; --surface: #17191E; --surface2: #22252B; --line: rgba(242,241,236,.12);
+    --ink: #F2F1EC; --ink2: #B0B2B8; --ink3: #7C7F86;
+    --accent: #6C8CFF; --accent-ink: #0D0E11; --accent-soft: #1F2747;
+    --good: #3CC48A; --good-soft: #15322A; --bad: #FF6B60; --bad-soft: #3A1D1B; --warm: #FFB84D; --warm-soft: #3A2C14;
+    --der: #7C98FF; --die: #FF7A70; --das: #4CD39A;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 50px -16px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D0E11; --surface: #17191E; --surface2: #22252B; --line: rgba(242,241,236,.12);
+  --ink: #F2F1EC; --ink2: #B0B2B8; --ink3: #7C7F86;
+  --accent: #6C8CFF; --accent-ink: #0D0E11; --accent-soft: #1F2747;
+  --good: #3CC48A; --good-soft: #15322A; --bad: #FF6B60; --bad-soft: #3A1D1B; --warm: #FFB84D; --warm-soft: #3A2C14;
+  --der: #7C98FF; --die: #FF7A70; --das: #4CD39A;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 50px -16px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 400 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  transition: background .5s var(--spring), color .5s var(--spring);
+}
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 3px; border-radius: 10px; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+h1, h2, h3 { letter-spacing: -.025em; line-height: 1.08; }
+h1 { font-size: clamp(42px, 7vw, 84px); font-weight: 760; }
+h2 { font-size: clamp(32px, 4.6vw, 54px); font-weight: 740; }
+h3 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; line-height: 1.25; }
+.eyebrow { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+.lead { font-size: clamp(18px, 2vw, 21px); color: var(--ink2); max-width: 600px; }
+.muted { color: var(--ink2); }
+
+/* ---------- motion primitives ---------- */
+.reveal { opacity: 0; transform: translateY(26px) scale(.985); transition: opacity .9s var(--spring), transform 1s var(--spring); transition-delay: var(--d, 0s); }
+.reveal.in { opacity: 1; transform: none; }
+.press { transition: transform .45s var(--spring), background .3s, color .3s, box-shadow .3s; }
+.press:active { transform: scale(.96); transition-duration: .12s; }
+
+/* ---------- nav ---------- */
+nav.top {
+  position: fixed; inset: 12px 12px auto; z-index: 50; max-width: 1160px; margin: 0 auto;
+  display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  backdrop-filter: saturate(1.6) blur(18px); -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow);
+  transform: translateY(-120%); animation: drop 1s var(--spring) .15s forwards;
+}
+@keyframes drop { to { transform: none; } }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 19px; letter-spacing: -.02em; }
+.logo i { width: 32px; height: 32px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 16px; }
+nav.top .links { display: flex; gap: 2px; margin-left: auto; }
+nav.top .links a { padding: 8px 12px; border-radius: 12px; font-size: 15px; color: var(--ink2); transition: background .25s, color .25s; }
+nav.top .links a:hover { background: var(--surface2); color: var(--ink); }
+.seg { display: flex; background: var(--surface2); border-radius: 12px; padding: 3px; position: relative; }
+.seg button { position: relative; z-index: 1; padding: 6px 10px; font-size: 13px; font-weight: 650; color: var(--ink3); border-radius: 9px; transition: color .3s; }
+.seg button[aria-pressed="true"] { color: var(--ink); }
+.seg .pill { position: absolute; top: 3px; bottom: 3px; border-radius: 9px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.12); transition: left .5s var(--spring), width .5s var(--spring); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 54px; padding: 0 24px; border-radius: 18px; font-weight: 650; font-size: 16px; white-space: nowrap; }
+.btn svg { width: 20px; height: 20px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--accent) 70%, transparent); }
+.btn.primary:hover { box-shadow: 0 16px 40px -12px color-mix(in srgb, var(--accent) 80%, transparent); transform: translateY(-1px); }
+.btn.ghost { background: var(--surface); border: 1px solid var(--line); }
+.btn.ghost:hover { background: var(--surface2); }
+.btn.sm { height: 40px; padding: 0 16px; border-radius: 14px; font-size: 15px; }
+@media (max-width: 860px) { nav.top .links { display: none; } nav.top .seg { margin-left: auto; } }
+@media (max-width: 420px) { nav.top .btn.sm span { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { min-height: 100svh; padding-top: 130px; padding-bottom: 60px; display: grid; align-items: center; position: relative; }
+.hero .grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center; }
+.hero .lead { margin: 22px 0 32px; }
+.hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero .meta { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 26px; font-size: 14px; color: var(--ink3); }
+.hero .meta b { color: var(--ink2); font-weight: 600; }
+.split > * { display: inline-block; opacity: 0; transform: translateY(.45em); filter: blur(6px); animation: word .9s var(--spring) forwards; }
+@keyframes word { to { opacity: 1; transform: none; filter: none; } }
+@media (max-width: 900px) { .hero .grid { grid-template-columns: 1fr; } .hero { padding-top: 110px; } }
+.split .acc { color: var(--accent); }
+
+/* phone mockup */
+.stage { position: relative; display: grid; place-items: center; perspective: 1400px; }
+.phone {
+  width: min(330px, 76vw); aspect-ratio: 9 / 19.5; border-radius: 48px; padding: 11px;
+  background: linear-gradient(145deg, #2a2d33, #0b0c0e); box-shadow: 0 40px 90px -30px rgba(10,12,20,.55), inset 0 0 0 1.5px rgba(255,255,255,.08);
+  transform: rotateY(-10deg) rotateX(4deg); transition: transform 1.2s var(--spring); position: relative;
+}
+.stage:hover .phone { transform: rotateY(-3deg) rotateX(1deg); }
+.screen { width: 100%; height: 100%; border-radius: 38px; overflow: hidden; position: relative; background: #000; }
+.screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; opacity: 0; transform: scale(1.04); transition: opacity .9s var(--spring), transform 1.2s var(--spring); }
+.screen img.on { opacity: 1; transform: none; }
+.island { position: absolute; top: 20px; left: 50%; width: 22%; height: 22px; border-radius: 20px; background: #000; transform: translateX(-50%); z-index: 2; }
+.chip {
+  position: absolute; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 18px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 14px; font-weight: 600; white-space: nowrap;
+  animation: float 7s ease-in-out infinite; z-index: 3;
+}
+.chip i { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-style: normal; }
+.chip i svg { width: 16px; height: 16px; }
+.chip.a { left: -6%; top: 20%; } .chip.b { right: -8%; top: 46%; animation-delay: -2.4s; } .chip.c { left: 2%; bottom: 12%; animation-delay: -4.6s; }
+@keyframes float { 50% { transform: translateY(-12px); } }
+.dots { display: flex; gap: 6px; justify-content: center; margin-top: 22px; }
+.dots button { width: 7px; height: 7px; border-radius: 9px; background: var(--ink3); opacity: .35; transition: width .5s var(--spring), opacity .4s; }
+.dots button.on { width: 24px; opacity: 1; background: var(--accent); }
+@media (max-width: 560px) { .chip.a { left: -2%; } .chip.b { right: -2%; } }
+
+/* ---------- stats ---------- */
+.stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 30px 0 0; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 22px; }
+.stat b { display: block; font-size: 38px; font-weight: 760; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 14px; color: var(--ink3); }
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } .stat:last-child { grid-column: span 2; } }
+
+section, section.wrap { padding-top: 110px; padding-bottom: 110px; }
+@media (max-width: 700px) { section, section.wrap { padding-top: 76px; padding-bottom: 76px; } }
+.head { max-width: 720px; margin-bottom: 48px; }
+.head h2 { margin: 12px 0 16px; }
+
+/* ---------- demo ---------- */
+.demo { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: center; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 28px; box-shadow: var(--shadow); }
+.quiz { padding: 32px; text-align: center; position: relative; overflow: hidden; }
+.quiz .bar { height: 10px; border-radius: 9px; background: var(--surface2); overflow: hidden; margin-bottom: 30px; }
+.quiz .bar div { height: 100%; width: 0; border-radius: 9px; background: var(--good); transition: width .7s var(--spring), background .4s; }
+.quiz .noun { font-size: clamp(40px, 6vw, 58px); font-weight: 760; letter-spacing: -.03em; min-height: 1.2em; }
+.quiz .gloss { color: var(--ink3); margin-bottom: 30px; min-height: 1.5em; }
+.quiz .noun, .quiz .gloss { transition: opacity .35s var(--spring), transform .5s var(--spring); }
+.quiz.swap .noun, .quiz.swap .gloss { opacity: 0; transform: translateX(-24px); }
+.arts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.arts button { height: 78px; border-radius: 20px; color: #fff; font-size: 24px; font-weight: 720; transition: transform .45s var(--spring), opacity .4s, filter .4s; }
+.arts button:active { transform: scale(.93); }
+.arts .der { background: var(--der); } .arts .die { background: var(--die); } .arts .das { background: var(--das); }
+.arts.locked button:not(.right) { opacity: .3; }
+.arts button.right { transform: scale(1.04); }
+.arts button.shake { animation: shake .45s; }
+@keyframes shake { 20%,60% { transform: translateX(-7px); } 40%,80% { transform: translateX(7px); } }
+.fb { margin-top: 18px; height: 52px; border-radius: 16px; display: grid; place-items: center; font-weight: 650; opacity: 0; transform: translateY(14px); transition: opacity .4s var(--spring), transform .6s var(--spring), background .3s, color .3s; }
+.fb.on { opacity: 1; transform: none; }
+.fb.ok { background: var(--good-soft); color: var(--good); } .fb.no { background: var(--bad-soft); color: var(--bad); }
+.combo { position: absolute; top: 22px; right: 24px; padding: 5px 11px; border-radius: 20px; background: var(--warm-soft); color: var(--warm); font-weight: 700; font-size: 14px; transform: scale(0); transition: transform .5s cubic-bezier(.34,1.56,.64,1); }
+.combo.on { transform: scale(1); }
+.points { display: grid; gap: 14px; }
+.point { display: flex; gap: 14px; align-items: flex-start; }
+.point i { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-style: normal; }
+.point i svg { width: 20px; height: 20px; }
+@media (max-width: 900px) { .demo { grid-template-columns: 1fr; } }
+
+/* ---------- features ---------- */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.feat { padding: 26px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); transition: transform .6s var(--spring), box-shadow .5s; position: relative; overflow: hidden; }
+.feat:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+.feat .ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 18px; }
+.feat .ic svg { width: 22px; height: 22px; }
+.feat p { color: var(--ink2); margin-top: 8px; font-size: 15.5px; }
+.feat.wide { grid-column: span 2; }
+.tag { display: inline-block; font-size: 12px; font-weight: 650; padding: 3px 9px; border-radius: 20px; background: var(--surface2); color: var(--ink3); margin-left: 6px; vertical-align: 2px; }
+@media (max-width: 900px) { .features { grid-template-columns: 1fr; } .feat.wide { grid-column: auto; } }
+
+/* ---------- pipeline ---------- */
+.pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; position: relative; counter-reset: s; }
+.pipe::before { content: ""; position: absolute; top: 31px; left: 10%; right: 10%; height: 3px; background: var(--surface2); border-radius: 3px; }
+.pipe .fill { position: absolute; top: 31px; left: 10%; height: 3px; width: 0; background: var(--accent); border-radius: 3px; transition: width 2.6s var(--spring); }
+.pipe.in .fill { width: 80%; }
+.step { text-align: center; padding: 0 10px; position: relative; }
+.step .n { width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px solid var(--line); font-weight: 750; font-size: 18px; position: relative; z-index: 1; transition: background .5s var(--spring), border-color .5s, color .5s, transform .6s var(--spring); transition-delay: var(--d); }
+.pipe.in .step .n { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); transform: scale(1.06); }
+.step p { color: var(--ink2); font-size: 15px; margin-top: 6px; }
+@media (max-width: 900px) {
+  .pipe { grid-template-columns: 1fr; gap: 22px; }
+  .pipe::before, .pipe .fill { left: 31px; top: 10px; bottom: 10px; width: 3px; height: auto; right: auto; }
+  .pipe .fill { height: 0; transition: height 2.6s var(--spring); } .pipe.in .fill { width: 3px; height: 92%; }
+  .step { display: grid; grid-template-columns: 64px 1fr; gap: 18px; text-align: left; align-items: center; padding: 0; }
+  .step .n { margin: 0; }
+}
+
+/* ---------- privacy ---------- */
+.privacy { background: #0D0E11; color: #F2F1EC; border-radius: 40px; margin: 0 12px; padding: 90px 0; position: relative; overflow: hidden; }
+.privacy .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+.privacy .eyebrow { color: #7C7F86; }
+.privacy .lead { color: #B0B2B8; }
+.checks { display: grid; gap: 4px; margin-top: 28px; }
+.checks div { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(242,241,236,.08); }
+.checks svg { width: 22px; height: 22px; color: #3CC48A; flex: none; }
+pre.code { background: #17191E; border: 1px solid rgba(242,241,236,.1); border-radius: 22px; padding: 26px; overflow-x: auto; font: 500 14px/1.7 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #B0B2B8; }
+pre.code .k { color: #FF7A70; } pre.code .s { color: #4CD39A; } pre.code .c { color: #7C7F86; } pre.code .t { color: #7C98FF; }
+.wifi { width: 110px; height: 110px; border-radius: 50%; display: grid; place-items: center; background: #15322A; color: #3CC48A; margin-bottom: 28px; position: relative; }
+.wifi::after { content: ""; position: absolute; inset: -14px; border-radius: 50%; border: 2px solid #3CC48A; opacity: 0; animation: ping 3s var(--spring) infinite; }
+@keyframes ping { 0% { transform: scale(.8); opacity: .6; } 100% { transform: scale(1.4); opacity: 0; } }
+.wifi svg { width: 50px; height: 50px; }
+@media (max-width: 900px) { .privacy .grid { grid-template-columns: 1fr; } .privacy { border-radius: 28px; padding: 70px 0; } }
+
+/* ---------- gallery ---------- */
+.gallery { display: flex; gap: 22px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 20px 24px 40px; margin: 0 -24px; scrollbar-width: none; }
+.gallery::-webkit-scrollbar { display: none; }
+.shot { flex: none; width: 260px; scroll-snap-align: center; text-align: center; }
+.shot .f { border-radius: 34px; padding: 8px; background: linear-gradient(145deg, #2a2d33, #0b0c0e); box-shadow: 0 30px 60px -28px rgba(10,12,20,.5); transition: transform .7s var(--spring); }
+.shot:hover .f { transform: translateY(-8px) rotate(-1deg); }
+.shot img { border-radius: 27px; aspect-ratio: 9/20; object-fit: cover; object-position: top; width: 100%; }
+.shot span { display: block; margin-top: 16px; font-size: 15px; color: var(--ink2); font-weight: 550; }
+
+/* ---------- install ---------- */
+.install { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; counter-reset: i; }
+.inst { padding: 28px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.inst::before { counter-increment: i; content: counter(i); display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 750; margin-bottom: 18px; }
+.inst p { color: var(--ink2); margin: 8px 0 18px; font-size: 15.5px; }
+@media (max-width: 900px) { .install { grid-template-columns: 1fr; } }
+
+/* ---------- models ---------- */
+table.models { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; font-size: 15.5px; }
+.models th, .models td { padding: 16px 20px; text-align: left; border-bottom: 1px solid var(--line); }
+.models th { font-size: 13px; color: var(--ink3); font-weight: 650; text-transform: uppercase; letter-spacing: .05em; }
+.models tr:last-child td { border-bottom: 0; }
+.models td:first-child { font-weight: 650; }
+.rec { font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 20px; margin-left: 8px; }
+.meter { display: inline-flex; gap: 3px; } .meter i { width: 7px; height: 7px; border-radius: 50%; background: var(--surface2); } .meter i.on { background: var(--accent); }
+.tablewrap { overflow-x: auto; border-radius: var(--r); }
+
+/* ---------- faq ---------- */
+.faq { max-width: 820px; }
+details { border-bottom: 1px solid var(--line); }
+summary { list-style: none; cursor: pointer; padding: 22px 0; font-size: 18px; font-weight: 620; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: ""; width: 12px; height: 12px; border-right: 2px solid var(--ink3); border-bottom: 2px solid var(--ink3); transform: rotate(45deg) translateY(-4px); transition: transform .5s var(--spring); flex: none; }
+details[open] summary::after { transform: rotate(225deg) translateY(-2px); }
+details .body { overflow: hidden; color: var(--ink2); padding-bottom: 22px; }
+
+footer { padding: 60px 0 80px; color: var(--ink3); font-size: 14px; }
+footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: center; }
+
+.cta-end { text-align: center; padding: 120px 0 60px; }
+.cta-end h2 { margin-bottom: 18px; }
+.cta-end .lead { margin: 0 auto 30px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+  .reveal, .split > * { opacity: 1; transform: none; filter: none; }
+  nav.top { transform: none; }
+}
+</style>
+</head>
+<body>
+
+<nav class="top" aria-label="Hauptnavigation">
+  <a class="logo" href="#top"><i>K</i>Kelimo</a>
+  <div class="links">
+    <a href="#demo" data-i18n="nav.demo">Ausprobieren</a>
+    <a href="#features" data-i18n="nav.features">Funktionen</a>
+    <a href="#trust" data-i18n="nav.trust">Genauigkeit</a>
+    <a href="#privacy" data-i18n="nav.privacy">Datenschutz</a>
+    <a href="#install" data-i18n="nav.install">Installieren</a>
+  </div>
+  <div class="seg" role="group" aria-label="Sprache">
+    <span class="pill"></span>
+    <button aria-pressed="true" data-lang="de">DE</button>
+    <button aria-pressed="false" data-lang="tr">TR</button>
+  </div>
+  <button class="seg-theme btn ghost sm press" id="themeBtn" aria-label="Hell/Dunkel umschalten" style="width:40px;padding:0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+  </button>
+  <a class="btn primary sm press" href="#install"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg><span data-i18n="nav.get">Laden</span></a>
+</nav>
+
+<header class="hero wrap" id="top">
+  <div class="grid">
+    <div>
+      <p class="eyebrow reveal" data-i18n="hero.eyebrow">Android · Kostenlos · Open Source</p>
+      <h1 style="margin-top:16px"><span class="split" data-i18n-split="hero.title">Sprachen lernen. Ohne dass es je jemand mitliest.</span></h1>
+      <p class="lead reveal" style="--d:.5s" data-i18n="hero.lead">Kelimo ist ein KI-Sprachtutor, der komplett auf deinem Handy läuft. Lektionen, echte Gespräche, Aussprache und Schreibkorrektur. Die App hat nicht einmal die Berechtigung, ins Internet zu gehen.</p>
+      <div class="ctas reveal" style="--d:.65s">
+        <a class="btn primary press" id="dl" href="https://github.com/Emre1001/kelimo/releases/latest/download/kelimo.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+          <span data-i18n="hero.cta">APK herunterladen</span>
+        </a>
+        <a class="btn ghost press" href="https://github.com/Emre1001/kelimo">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.75.11 3.04.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+          GitHub
+        </a>
+      </div>
+      <div class="meta reveal" style="--d:.8s">
+        <span><b>13,7 MB</b> APK</span><span><b>Android 12+</b></span><span data-i18n-html="hero.meta"><b>Galaxy S25+</b> empfohlen</span>
+      </div>
+    </div>
+    <div class="stage reveal" style="--d:.3s">
+      <div>
+        <div class="phone" id="phone">
+          <div class="screen" id="screen">
+            <div class="island"></div>
+            <img src="assets/shots/path.webp" alt="Lernpfad" class="on">
+            <img src="assets/shots/lesson.webp" alt="Übung: Bedeutung wählen" loading="lazy">
+            <img src="assets/shots/match.webp" alt="Übung: Paare finden" loading="lazy">
+            <img src="assets/shots/speak_dark.webp" alt="Sprechen und Rollenspiele" loading="lazy">
+            <img src="assets/shots/privacy_dark.webp" alt="Datenschutz-Nachweis" loading="lazy">
+          </div>
+        </div>
+        <div class="dots" id="dots"></div>
+      </div>
+      <div class="chip a"><i style="background:var(--good-soft);color:var(--good)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2-1.5M12 20h.01"/></svg></i><span data-i18n="chip.a">Keine Internet-Berechtigung</span></div>
+      <div class="chip b"><i style="background:var(--accent-soft);color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/></svg></i>Gemma 4 · on-device</div>
+      <div class="chip c"><i style="background:var(--warm-soft);color:var(--warm)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i><span data-i18n="chip.c">Korrekturen doppelt geprüft</span></div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat reveal"><b data-count="0">0</b><span data-i18n="stat.0">Server, die mitlesen</span></div>
+    <div class="stat reveal" style="--d:.08s"><b data-count="288">0</b><span data-i18n="stat.1">geprüfte Wörter</span></div>
+    <div class="stat reveal" style="--d:.16s"><b data-count="215">0</b><span data-i18n="stat.2">echte Beispielsätze</span></div>
+    <div class="stat reveal" style="--d:.24s"><b data-count="11">0</b><span data-i18n="stat.3">Übungstypen</span></div>
+    <div class="stat reveal" style="--d:.32s"><b data-count="13">0</b><span data-i18n="stat.4">Sprachen</span></div>
+  </div>
+</header>
+
+<section id="demo" class="wrap">
+  <div class="demo">
+    <div class="reveal">
+      <p class="eyebrow" data-i18n="demo.eyebrow">Probier es hier aus</p>
+      <h2 style="margin:12px 0 18px" data-i18n="demo.title">der, die oder das?</h2>
+      <p class="lead" data-i18n="demo.lead">Genau so fühlt sich eine Übung in Kelimo an: sofortiges Feedback, keine Ladezeit, keine Werbung. Jedes Wort kommt aus dem geprüften Kurs.</p>
+      <div class="points" style="margin-top:28px">
+        <div class="point"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></i><div><b data-i18n="demo.p1t">Bewertet ohne KI.</b> <span class="muted" data-i18n="demo.p1">Antworten werden exakt gegen den Lösungsschlüssel geprüft. Tippfehler werden erkannt, falsche Artikel nie.</span></div></div>
+        <div class="point"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></i><div><b data-i18n="demo.p2t">Passt sich an.</b> <span class="muted" data-i18n="demo.p2">Ein Fähigkeitsmodell pro Skill entscheidet nach jeder Antwort, ob es leichter oder schwerer wird.</span></div></div>
+      </div>
+    </div>
+    <div class="card quiz reveal" style="--d:.15s" id="quiz">
+      <span class="combo" id="combo">×0</span>
+      <div class="bar"><div id="qbar"></div></div>
+      <div class="noun" id="noun">Vater</div>
+      <div class="gloss" id="gloss">baba</div>
+      <div class="arts" id="arts">
+        <button class="der press" data-a="m">der</button>
+        <button class="die press" data-a="f">die</button>
+        <button class="das press" data-a="n">das</button>
+      </div>
+      <div class="fb" id="fb"></div>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="wrap">
+  <div class="head reveal">
+    <p class="eyebrow" data-i18n="feat.eyebrow">Alles drin</p>
+    <h2 data-i18n="feat.title">Wie ein Lehrer in der Hosentasche.</h2>
+    <p class="lead" data-i18n="feat.lead">Strukturierter Kurs von A1 bis B1, freie Gespräche, Rollenspiele aus dem echten Leben in Deutschland und Werkzeuge, die dir zeigen, warum etwas richtig ist.</p>
+  </div>
+  <div class="features">
+    <div class="feat wide reveal"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2zm0 0a2 2 0 0 1 2-2h12"/></svg></div><h3 data-i18n="f1t">Kurs mit 11 Übungstypen</h3><p data-i18n="f1">Bedeutung wählen, Paare finden, Sätze aus Kacheln bauen, Lückentext, Diktat, Aussprache, Artikel-Trainer, Verbkonjugation, Tippen mit ä ö ü ß. Falsche Antworten kommen am Ende der Lektion noch einmal.</p></div>
+    <div class="feat reveal" style="--d:.08s"><div class="ic" style="background:var(--warm-soft);color:var(--warm)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/></svg></div><h3 data-i18n="f2t">Echte Gespräche</h3><p data-i18n="f2">Freihändiger Sprachmodus: zuhören, antworten, sanft korrigiert werden. Spracherkennung nur auf dem Gerät.</p></div>
+    <div class="feat reveal"><div class="ic" style="background:var(--good-soft);color:var(--good)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg></div><h3 data-i18n="f3t">12 Rollenspiele</h3><p data-i18n="f3">Bäckerei, Arzt, Bürgeramt, Wohnungsbesichtigung, Vorstellungsgespräch, Elterngespräch, Reklamation und mehr.</p></div>
+    <div class="feat reveal" style="--d:.08s"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div><h3 data-i18n="f4t">Schreibcoach</h3><p data-i18n="f4">Schreib einen Text, sieh jede Korrektur farbig markiert, mit Erklärung auf Türkisch und Niveau-Schätzung.</p></div>
+    <div class="feat reveal" style="--d:.16s"><div class="ic" style="background:var(--bad-soft);color:var(--bad)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4zM9 9h6M9 13h6M9 17h3"/></svg></div><h3 data-i18n="f5t">Fehlerheft &amp; Wiederholung</h3><p data-i18n="f5">Jeder Fehler landet im Heft. Spaced Repetition holt Wörter genau dann zurück, bevor du sie vergisst.</p></div>
+    <div class="feat reveal"><div class="ic" style="background:var(--good-soft);color:var(--good)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6V4m0 16v-2M6 12H4m16 0h-2M7.8 7.8 6.4 6.4m11.2 11.2-1.4-1.4M7.8 16.2l-1.4 1.4M17.6 6.4l-1.4 1.4"/><circle cx="12" cy="12" r="3.5"/></svg></div><h3 data-i18n="f6t">Einstufungstest</h3><p data-i18n="f6">Adaptiver Test in 3 Minuten. Danach startet der Kurs genau auf deinem Niveau.</p></div>
+    <div class="feat reveal" style="--d:.08s"><div class="ic" style="background:var(--warm-soft);color:var(--warm)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h7a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-7a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h8z"/></svg></div><h3 data-i18n="f7t">Geschichten &amp; Grammatik</h3><p data-i18n="f7">Lesegeschichten mit Verständnisfragen, Grammatik-Fragen mit Quellenangabe, Wörterbuch mit Artikel und Plural.</p></div>
+    <div class="feat reveal" style="--d:.16s"><div class="ic" style="background:var(--accent-soft);color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></div><h3><span data-i18n="f8t">Nicht nur Deutsch</span> <span class="tag">13</span></h3><p data-i18n="f8">Deutsch und Englisch mit geprüftem Kurs. Spanisch, Französisch, Italienisch, Niederländisch, Portugiesisch, Polnisch, Russisch, Ukrainisch, Arabisch, Japanisch und Türkisch mit KI-Lektionen und Gesprächen. Oberfläche auf Türkisch, Deutsch oder Englisch.</p></div>
+  </div>
+</section>
+
+<section id="trust" class="wrap">
+  <div class="head reveal">
+    <p class="eyebrow" data-i18n="trust.eyebrow">Gegen Halluzinationen</p>
+    <h2 data-i18n="trust.title">Das Modell schlägt vor. Der Code entscheidet.</h2>
+    <p class="lead" data-i18n="trust.lead">Kleine Sprachmodelle können sich irren. Deshalb vertraut Kelimo ihnen nie blind. Jede KI-Ausgabe muss fünf Stufen überstehen, sonst wird sie nicht angezeigt.</p>
+  </div>
+  <div class="pipe" id="pipe">
+    <div class="fill"></div>
+    <div class="step" style="--d:.1s"><div class="n">1</div><div><h3 data-i18n="p1t">Fester Lösungsschlüssel</h3><p data-i18n="p1">Übungen werden nie von der KI bewertet, sondern exakt gegen geprüfte Inhalte.</p></div></div>
+    <div class="step" style="--d:.6s"><div class="n">2</div><div><h3 data-i18n="p2t">JSON-Schema</h3><p data-i18n="p2">Die Ausgabe ist per Constrained Decoding an ein Schema gebunden. Kein Freitext-Chaos.</p></div></div>
+    <div class="step" style="--d:1.1s"><div class="n">3</div><div><h3 data-i18n="p3t">Faktenprüfung</h3><p data-i18n="p3">Korrekturen müssen auf Text zeigen, den du wirklich geschrieben hast. Sonst fliegen sie raus.</p></div></div>
+    <div class="step" style="--d:1.6s"><div class="n">4</div><div><h3 data-i18n="p4t">Zweite Meinung</h3><p data-i18n="p4">Ein unabhängiger zweiter Durchlauf bei Temperatur 0 muss jeder Korrektur zustimmen.</p></div></div>
+    <div class="step" style="--d:2.1s"><div class="n">5</div><div><h3 data-i18n="p5t">Ehrliche Labels</h3><p data-i18n="p5">Was nicht geprüft ist, wird als KI-Inhalt markiert. Grammatik-Antworten nennen ihre Quellen.</p></div></div>
+  </div>
+</section>
+
+<section id="privacy" class="privacy">
+  <div class="wrap grid">
+    <div class="reveal">
+      <div class="wifi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2-1.5M2 8.8a15 15 0 0 1 4.2-2.6M22 8.8A15 15 0 0 0 10.7 5M12 20h.01"/></svg></div>
+      <p class="eyebrow" data-i18n="priv.eyebrow">100 % privat</p>
+      <h2 style="margin:12px 0 18px" data-i18n="priv.title">Kein Versprechen. Eine technische Tatsache.</h2>
+      <p class="lead" data-i18n="priv.lead">Kelimo fordert keine Internet-Berechtigung an. Android blockiert deshalb jede Verbindung, bevor sie entsteht. Das kannst du in der App selbst überprüfen.</p>
+      <div class="checks">
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="c1">KI läuft auf dem Chip deines Handys</span></div>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="c2">Spracherkennung und Stimme offline</span></div>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="c3">Kein Konto, keine Werbung, keine Analyse</span></div>
+        <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span data-i18n="c4">Kein Cloud-Backup deiner Daten</span></div>
+      </div>
+    </div>
+    <pre class="code reveal" style="--d:.15s"><span class="c">&lt;!-- AndroidManifest.xml --&gt;</span>
+<span class="c">&lt;!-- Kein Netzwerk. Jede Bibliothek, die eins
+     hinzufügen will, wird hier entfernt. --&gt;</span>
+&lt;<span class="t">uses-permission</span>
+    <span class="k">android:name</span>=<span class="s">"android.permission.INTERNET"</span>
+    <span class="k">tools:node</span>=<span class="s">"remove"</span> /&gt;
+
+<span class="c">&lt;!-- Keine Cloud-Sicherung --&gt;</span>
+&lt;<span class="t">application</span>
+    <span class="k">android:allowBackup</span>=<span class="s">"false"</span> … &gt;</pre>
+  </div>
+</section>
+
+<section class="wrap" id="screens">
+  <div class="head reveal" style="display:flex;justify-content:space-between;align-items:flex-end;max-width:none;gap:20px;flex-wrap:wrap">
+    <div style="max-width:620px"><p class="eyebrow" data-i18n="gal.eyebrow">Design</p><h2 style="margin-top:12px" data-i18n="gal.title">Ruhig. Schnell. Ohne Schnickschnack.</h2></div>
+    <div class="seg" role="group" aria-label="Hell/Dunkel" id="galSeg"><span class="pill"></span><button aria-pressed="true" data-mode="light" data-i18n="gal.light">Hell</button><button aria-pressed="false" data-mode="dark" data-i18n="gal.dark">Dunkel</button></div>
+  </div>
+  <div class="gallery" id="gallery">
+    <figure class="shot reveal"><div class="f"><img loading="lazy" src="assets/shots/welcome.webp" data-dark="assets/shots/path_dark.webp" alt="Willkommen"></div><span data-i18n="g1">Setup in einer Minute</span></figure>
+    <figure class="shot reveal" style="--d:.06s"><div class="f"><img loading="lazy" src="assets/shots/path.webp" data-dark="assets/shots/path_dark.webp" alt="Lernpfad"></div><span data-i18n="g2">Lernpfad</span></figure>
+    <figure class="shot reveal" style="--d:.12s"><div class="f"><img loading="lazy" src="assets/shots/lesson.webp" data-dark="assets/shots/practice_dark.webp" alt="Übung"></div><span data-i18n="g3">Übungen</span></figure>
+    <figure class="shot reveal" style="--d:.18s"><div class="f"><img loading="lazy" src="assets/shots/match.webp" data-dark="assets/shots/speak_dark.webp" alt="Paare"></div><span data-i18n="g4">Paare &amp; Sprechen</span></figure>
+    <figure class="shot reveal" style="--d:.24s"><div class="f"><img loading="lazy" src="assets/shots/models.webp" data-dark="assets/shots/privacy_dark.webp" alt="Modelle"></div><span data-i18n="g5">Modelle &amp; Datenschutz</span></figure>
+    <figure class="shot reveal" style="--d:.3s"><div class="f"><img loading="lazy" src="assets/shots/interests.webp" data-dark="assets/shots/practice_dark.webp" alt="Interessen"></div><span data-i18n="g6">Persönlich</span></figure>
+  </div>
+</section>
+
+<section id="install" class="wrap">
+  <div class="head reveal">
+    <p class="eyebrow" data-i18n="inst.eyebrow">Installieren</p>
+    <h2 data-i18n="inst.title">In drei Schritten startklar.</h2>
+    <p class="lead" data-i18n="inst.lead">Kelimo ist nicht im Play Store. Du installierst die APK direkt, wie bei jedem Open-Source-Projekt.</p>
+  </div>
+  <div class="install">
+    <div class="inst reveal"><h3 data-i18n="i1t">APK laden</h3><p data-i18n="i1">Öffne diese Seite auf deinem Handy und lade die neueste Version.</p><a class="btn primary sm press" href="https://github.com/Emre1001/kelimo/releases/latest/download/kelimo.apk"><span data-i18n="hero.cta">APK herunterladen</span></a></div>
+    <div class="inst reveal" style="--d:.08s"><h3 data-i18n="i2t">Installieren</h3><p data-i18n="i2">Tippe auf die Datei. Android fragt einmal, ob dein Browser Apps installieren darf: erlauben, installieren, fertig.</p></div>
+    <div class="inst reveal" style="--d:.16s"><h3 data-i18n="i3t">KI-Modell hinzufügen</h3><p data-i18n="i3">Lektionen gehen sofort. Für Gespräche lädst du einmal ein Modell (z. B. Gemma 4 E4B, 3,7 GB) und importierst es in der App.</p></div>
+  </div>
+
+  <div class="head reveal" style="margin-top:90px">
+    <p class="eyebrow" data-i18n="mod.eyebrow">Modelle</p>
+    <h2 data-i18n="mod.title">Wähle dein Gehirn. Und rüste später auf.</h2>
+    <p class="lead" data-i18n="mod.lead">Jedes Modell im LiteRT-LM-Format (.litertlm) funktioniert. Wenn neue, bessere Modelle erscheinen, importierst du sie einfach.</p>
+  </div>
+  <div class="tablewrap reveal">
+    <table class="models">
+      <thead><tr><th>Modell</th><th data-i18n="mod.size">Größe</th><th>RAM</th><th data-i18n="mod.q">Qualität</th><th data-i18n="mod.s">Tempo</th></tr></thead>
+      <tbody id="modelRows"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="wrap faq" id="faq">
+  <div class="head reveal"><p class="eyebrow">FAQ</p><h2 style="margin-top:12px" data-i18n="faq.title">Gute Fragen.</h2></div>
+  <details class="reveal"><summary data-i18n="q1">Ist Kelimo wirklich kostenlos?</summary><div class="body" data-i18n="a1">Ja. Keine Werbung, kein Abo, keine In-App-Käufe. Der Quellcode ist offen.</div></details>
+  <details class="reveal"><summary data-i18n="q2">Warum hat die App keinen eigenen Download-Button für Modelle?</summary><div class="body" data-i18n="a2">Weil sie dafür eine Internet-Berechtigung bräuchte. Ohne diese Berechtigung kann sie technisch gar nichts senden. Den einmaligen Download erledigt dein Browser.</div></details>
+  <details class="reveal"><summary data-i18n="q3">Läuft das auf meinem Handy?</summary><div class="body" data-i18n="a3">Lektionen laufen auf jedem Android 12+. Für die KI empfehlen wir 8 GB RAM oder mehr, ideal ist ein Galaxy S25 / S25+ oder vergleichbar. Mit 6 GB nimmst du Gemma 4 E2B.</div></details>
+  <details class="reveal"><summary data-i18n="q4">Kann die KI mir falsche Grammatik beibringen?</summary><div class="body" data-i18n="a4">Der Kurs und die Bewertung kommen nie von der KI. Korrekturen im Gespräch werden doppelt geprüft und nur gezeigt, wenn beide Prüfungen übereinstimmen. Unsichere Inhalte sind gekennzeichnet.</div></details>
+  <details class="reveal"><summary data-i18n="q5">Funktioniert Sprechen offline?</summary><div class="body" data-i18n="a5">Ja, mit der Offline-Spracherkennung von Android. Fehlt das Sprachpaket, nutzt Kelimo bewusst keine Cloud-Erkennung, sondern zeigt dir, wo du es installierst.</div></details>
+</section>
+
+<div class="cta-end wrap reveal">
+  <h2 data-i18n="end.title">Fang heute an. Fünf Minuten reichen.</h2>
+  <p class="lead" data-i18n="end.lead">Dein Handy wird zum Sprachlehrer, der niemandem etwas erzählt.</p>
+  <a class="btn primary press" href="https://github.com/Emre1001/kelimo/releases/latest/download/kelimo.apk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg><span data-i18n="hero.cta">APK herunterladen</span></a>
+</div>
+
+<footer class="wrap">
+  <div class="row">
+    <a class="logo" href="#top"><i>K</i>Kelimo</a>
+    <span data-i18n="foot">Open Source · MIT-Lizenz · Diese Seite nutzt keine Cookies und kein Tracking.</span>
+    <a href="https://github.com/Emre1001/kelimo">github.com/Emre1001/kelimo</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  // ---------- i18n ----------
+  const TR = {
+    "nav.demo": "Dene", "nav.features": "Özellikler", "nav.trust": "Doğruluk", "nav.privacy": "Gizlilik", "nav.install": "Kurulum", "nav.get": "İndir",
+    "hero.eyebrow": "Android · Ücretsiz · Açık kaynak",
+    "hero.title": "Dil öğren. Kimse okumadan.",
+    "hero.lead": "Kelimo tamamen telefonunda çalışan bir yapay zekâ dil öğretmeni. Dersler, gerçek sohbetler, telaffuz ve yazı düzeltme. Uygulamanın internete çıkma izni bile yok.",
+    "hero.cta": "APK indir", "hero.meta": "<b>Galaxy S25+</b> önerilir",
+    "chip.a": "İnternet izni yok", "chip.c": "Düzeltmeler çift kontrollü",
+    "stat.0": "seni okuyan sunucu", "stat.1": "kontrol edilmiş kelime", "stat.2": "gerçek örnek cümle", "stat.3": "alıştırma türü", "stat.4": "dil",
+    "demo.eyebrow": "Burada dene", "demo.title": "der, die mi das mı?",
+    "demo.lead": "Kelimo'da bir alıştırma tam olarak böyle hissettirir: anında geri bildirim, bekleme yok, reklam yok. Her kelime kontrol edilmiş kurstan gelir.",
+    "demo.p1t": "Yapay zekâsız puanlama.", "demo.p1": "Cevaplar cevap anahtarıyla birebir karşılaştırılır. Yazım hataları tanınır, yanlış artikel asla kabul edilmez.",
+    "demo.p2t": "Sana uyum sağlar.", "demo.p2": "Her beceri için bir yetenek modeli, her cevaptan sonra işin kolaylaşıp zorlaşacağına karar verir.",
+    "feat.eyebrow": "Her şey içinde", "feat.title": "Cebindeki öğretmen.",
+    "feat.lead": "A1'den B1'e yapılandırılmış kurs, serbest sohbetler, Almanya'daki gerçek hayattan canlandırmalar ve bir şeyin neden doğru olduğunu gösteren araçlar.",
+    "f1t": "11 alıştırma türüyle kurs", "f1": "Anlam seç, eşleri bul, kartlarla cümle kur, boşluk doldur, dikte, telaffuz, artikel çalışması, fiil çekimi, ä ö ü ß ile yazma. Yanlış cevaplar dersin sonunda tekrar gelir.",
+    "f2t": "Gerçek sohbetler", "f2": "Eller serbest ses modu: dinle, cevap ver, nazikçe düzeltil. Konuşma tanıma sadece cihazda.",
+    "f3t": "12 canlandırma", "f3": "Fırın, doktor, belediye, ev görme, iş görüşmesi, veli toplantısı, şikâyet ve daha fazlası.",
+    "f4t": "Yazma koçu", "f4": "Bir metin yaz, her düzeltmeyi renkli olarak ve Türkçe açıklamasıyla gör, seviyeni öğren.",
+    "f5t": "Hata defteri ve tekrar", "f5": "Her hata deftere yazılır. Aralıklı tekrar kelimeleri tam unutmadan önce geri getirir.",
+    "f6t": "Seviye testi", "f6": "3 dakikalık uyarlanabilir test. Sonra kurs tam senin seviyende başlar.",
+    "f7t": "Hikâyeler ve gramer", "f7": "Anlama sorulu okuma hikâyeleri, kaynak gösteren gramer cevapları, artikel ve çoğullu sözlük.",
+    "f8t": "Sadece Almanca değil", "f8": "Almanca ve İngilizce kontrol edilmiş kursla. İspanyolca, Fransızca, İtalyanca, Felemenkçe, Portekizce, Lehçe, Rusça, Ukraynaca, Arapça, Japonca ve Türkçe yapay zekâ dersleri ve sohbetlerle. Arayüz Türkçe, Almanca veya İngilizce.",
+    "trust.eyebrow": "Halüsinasyona karşı", "trust.title": "Model önerir. Kod karar verir.",
+    "trust.lead": "Küçük dil modelleri yanılabilir. Bu yüzden Kelimo onlara asla körü körüne güvenmez. Her yapay zekâ çıktısı beş aşamayı geçmek zorunda, yoksa gösterilmez.",
+    "p1t": "Sabit cevap anahtarı", "p1": "Alıştırmalar asla yapay zekâ tarafından değil, kontrol edilmiş içerikle birebir puanlanır.",
+    "p2t": "JSON şeması", "p2": "Çıktı, kısıtlı kod çözme ile bir şemaya bağlıdır. Serbest metin kaosu yok.",
+    "p3t": "Gerçeklik kontrolü", "p3": "Düzeltmeler gerçekten yazdığın metni göstermek zorunda. Yoksa atılır.",
+    "p4t": "İkinci görüş", "p4": "Sıcaklık 0'da bağımsız ikinci bir kontrol her düzeltmeyi onaylamalı.",
+    "p5t": "Dürüst etiketler", "p5": "Kontrol edilmemiş içerik yapay zekâ içeriği olarak işaretlenir. Gramer cevapları kaynak gösterir.",
+    "priv.eyebrow": "%100 gizli", "priv.title": "Bir söz değil. Teknik bir gerçek.",
+    "priv.lead": "Kelimo internet izni istemez. Bu yüzden Android her bağlantıyı daha oluşmadan engeller. Bunu uygulamanın içinde kendin kontrol edebilirsin.",
+    "c1": "Yapay zekâ telefonunun çipinde çalışır", "c2": "Konuşma tanıma ve ses çevrimdışı", "c3": "Hesap yok, reklam yok, analiz yok", "c4": "Verilerinin bulut yedeği yok",
+    "gal.eyebrow": "Tasarım", "gal.title": "Sakin. Hızlı. Gereksiz süs yok.", "gal.light": "Açık", "gal.dark": "Koyu",
+    "g1": "Bir dakikada kurulum", "g2": "Öğrenme yolu", "g3": "Alıştırmalar", "g4": "Eşler ve konuşma", "g5": "Modeller ve gizlilik", "g6": "Kişisel",
+    "inst.eyebrow": "Kurulum", "inst.title": "Üç adımda hazır.", "inst.lead": "Kelimo Play Store'da değil. Her açık kaynak projede olduğu gibi APK'yı doğrudan kurarsın.",
+    "i1t": "APK'yı indir", "i1": "Bu sayfayı telefonunda aç ve en yeni sürümü indir.",
+    "i2t": "Kur", "i2": "Dosyaya dokun. Android bir kez tarayıcının uygulama kurmasına izin verip vermeyeceğini sorar: izin ver, kur, bitti.",
+    "i3t": "Yapay zekâ modeli ekle", "i3": "Dersler hemen çalışır. Sohbet için bir kez model indirip (ör. Gemma 4 E4B, 3,7 GB) uygulamaya aktarırsın.",
+    "mod.eyebrow": "Modeller", "mod.title": "Beynini seç. Sonra yükselt.", "mod.lead": "LiteRT-LM biçimindeki (.litertlm) her model çalışır. Yeni ve daha iyi modeller çıkınca onları içe aktarman yeterli.",
+    "mod.size": "Boyut", "mod.q": "Kalite", "mod.s": "Hız",
+    "faq.title": "Güzel sorular.",
+    "q1": "Kelimo gerçekten ücretsiz mi?", "a1": "Evet. Reklam yok, abonelik yok, uygulama içi satın alma yok. Kaynak kodu açık.",
+    "q2": "Uygulamada neden modeller için indirme düğmesi yok?", "a2": "Çünkü bunun için internet izni gerekirdi. Bu izin olmadan uygulama teknik olarak hiçbir şey gönderemez. Tek seferlik indirmeyi tarayıcın yapar.",
+    "q3": "Telefonumda çalışır mı?", "a3": "Dersler her Android 12+ cihazda çalışır. Yapay zekâ için 8 GB RAM veya üstü öneriyoruz, ideali Galaxy S25 / S25+ ya da benzeri. 6 GB ile Gemma 4 E2B'yi seç.",
+    "q4": "Yapay zekâ bana yanlış gramer öğretebilir mi?", "a4": "Kurs ve puanlama asla yapay zekâdan gelmez. Sohbetteki düzeltmeler iki kez kontrol edilir ve yalnızca iki kontrol de onaylarsa gösterilir. Emin olunmayan içerik işaretlenir.",
+    "q5": "Konuşma çevrimdışı çalışır mı?", "a5": "Evet, Android'in çevrimdışı konuşma tanımasıyla. Dil paketi yoksa Kelimo bilerek bulut tanıma kullanmaz, nereden yükleyeceğini gösterir.",
+    "end.title": "Bugün başla. Beş dakika yeter.", "end.lead": "Telefonun, kimseye bir şey anlatmayan bir dil öğretmenine dönüşür.",
+    "foot": "Açık kaynak · MIT lisansı · Bu sayfa çerez ve takip kullanmaz."
+  };
+  const DE = {};
+  $$("[data-i18n]").forEach(el => DE[el.dataset.i18n] = el.textContent);
+  $$("[data-i18n-html]").forEach(el => DE[el.dataset.i18nHtml] = el.innerHTML);
+  $$("[data-i18n-split]").forEach(el => DE[el.dataset.i18nSplit] = el.textContent);
+
+  function split(el, text) {
+    el.innerHTML = "";
+    let acc = false; // words after the first sentence get the accent color
+    text.split(" ").forEach((w, i) => {
+      const s = document.createElement("span");
+      s.textContent = w;
+      if (acc) s.className = "acc";
+      if (w.endsWith(".")) acc = true;
+      s.style.animationDelay = (0.25 + i * 0.07) + "s";
+      el.append(s, " ");
+    });
+  }
+  function setLang(lang) {
+    const dict = lang === "tr" ? TR : DE;
+    document.documentElement.lang = lang;
+    $$("[data-i18n]").forEach(el => { const v = dict[el.dataset.i18n]; if (v) el.textContent = v; });
+    $$("[data-i18n-html]").forEach(el => { const v = dict[el.dataset.i18nHtml]; if (v) el.innerHTML = v; });
+    $$("[data-i18n-split]").forEach(el => split(el, dict[el.dataset.i18nSplit]));
+    $$("nav .seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+    movePill($("nav .seg"));
+    quiz.lang = lang; quiz.render(false);
+    try { localStorage.setItem("kelimo.lang", lang); } catch (e) {}
+  }
+  function movePill(seg) {
+    const on = seg.querySelector('button[aria-pressed="true"]'), pill = seg.querySelector(".pill");
+    if (!on || !pill) return;
+    pill.style.left = on.offsetLeft + "px"; pill.style.width = on.offsetWidth + "px";
+  }
+  $$("nav .seg button").forEach(b => b.onclick = () => setLang(b.dataset.lang));
+
+  // ---------- theme ----------
+  const root = document.documentElement;
+  const isDark = () => root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  $("#themeBtn").onclick = () => {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("kelimo.theme", root.dataset.theme); } catch (e) {}
+    syncShots();
+  };
+  try { const t = localStorage.getItem("kelimo.theme"); if (t) root.dataset.theme = t; } catch (e) {}
+
+  // ---------- reveal on scroll ----------
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    if (e.target.dataset.count !== undefined) count(e.target);
+    io.unobserve(e.target);
+  }), { threshold: 0.18, rootMargin: "0px 0px -6% 0px" });
+  $$(".reveal, #pipe, [data-count]").forEach(el => io.observe(el));
+
+  function count(el) {
+    const to = +el.dataset.count, t0 = performance.now(), dur = reduce ? 1 : 1400;
+    const tick = t => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 4); el.textContent = Math.round(to * e); if (p < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- phone carousel + tilt ----------
+  const imgs = $$("#screen img"), dots = $("#dots");
+  let cur = 0, timer;
+  imgs.forEach((_, i) => { const b = document.createElement("button"); b.setAttribute("aria-label", "Screen " + (i + 1)); b.onclick = () => { show(i); restart(); }; dots.append(b); });
+  function show(i) { imgs[cur].classList.remove("on"); dots.children[cur].classList.remove("on"); cur = i; imgs[cur].classList.add("on"); dots.children[cur].classList.add("on"); }
+  function restart() { clearInterval(timer); if (!reduce) timer = setInterval(() => show((cur + 1) % imgs.length), 3200); }
+  show(0); restart();
+  const stage = $(".stage"), phone = $("#phone");
+  if (!reduce && matchMedia("(pointer: fine)").matches) {
+    stage.addEventListener("pointermove", e => {
+      const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      phone.style.transform = `rotateY(${x * 16}deg) rotateX(${-y * 10}deg)`;
+    });
+    stage.addEventListener("pointerleave", () => phone.style.transform = "");
+  }
+
+  // ---------- gallery light/dark ----------
+  const galSeg = $("#galSeg");
+  function syncShots(mode) {
+    mode = mode || (isDark() ? "dark" : "light");
+    $$("#gallery img").forEach(img => {
+      img.dataset.light = img.dataset.light || img.getAttribute("src");
+      const next = mode === "dark" ? img.dataset.dark : img.dataset.light;
+      if (img.getAttribute("src") === next) return;
+      img.style.transition = "opacity .35s"; img.style.opacity = 0;
+      setTimeout(() => { img.src = next; img.onload = () => img.style.opacity = 1; }, reduce ? 0 : 200);
+    });
+    $$("button", galSeg).forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode));
+    movePill(galSeg);
+  }
+  $$("button", galSeg).forEach(b => b.onclick = () => syncShots(b.dataset.mode));
+
+  // ---------- article quiz (same rules as the app: exact key, no AI) ----------
+  const WORDS = [["Vater","m","baba","father"],["Beruf","m","meslek","job"],["Suppe","f","çorba","soup"],["Musik","f","müzik","music"],["Ecke","f","köşe","corner"],["Speisekarte","f","menü","menu"],["Tüte","f","poşet","bag"],["Bad","n","banyo","bathroom"],["Sport","m","spor","sport"],["Amt","n","resmi daire","office"],["Opa","m","dede","grandpa"],["Schlafzimmer","n","yatak odası","bedroom"],["Fleisch","n","et","meat"],["Krankenwagen","m","ambulans","ambulance"],["Stadt","f","şehir","city"],["Sonne","f","güneş","sun"],["Ausweis","m","kimlik","ID card"],["Prüfung","f","sınav","exam"],["Fenster","n","pencere","window"],["Lampe","f","lamba","lamp"],["Miete","f","kira","rent"],["Hotel","n","otel","hotel"],["Bahnhof","m","tren garı","station"],["Wetter","n","hava","weather"],["Hund","m","köpek","dog"],["Mädchen","n","kız","girl"],["Wohnung","f","daire","apartment"],["Kind","n","çocuk","child"]];
+  const ART = { m: "der", f: "die", n: "das" };
+  const quiz = {
+    i: 0, combo: 0, done: 0, lang: "de", busy: false,
+    order: WORDS.map((_, i) => i).sort(() => Math.random() - .5),
+    get w() { return WORDS[this.order[this.i % WORDS.length]]; },
+    render(anim = true) {
+      const q = $("#quiz");
+      const set = () => { $("#noun").textContent = this.w[0]; $("#gloss").textContent = this.lang === "tr" ? this.w[2] : this.w[3]; };
+      if (!anim || reduce) return set();
+      q.classList.add("swap");
+      setTimeout(() => { set(); q.classList.remove("swap"); }, 260);
+    },
+    answer(btn) {
+      if (this.busy) return;
+      this.busy = true;
+      const ok = btn.dataset.a === this.w[1], arts = $("#arts"), fb = $("#fb");
+      const right = $(`#arts [data-a="${this.w[1]}"]`);
+      arts.classList.add("locked"); right.classList.add("right");
+      if (!ok) btn.classList.add("shake");
+      if (navigator.vibrate) navigator.vibrate(ok ? 12 : [20, 40, 20]);
+      this.combo = ok ? this.combo + 1 : 0; this.done++;
+      const tr = this.lang === "tr";
+      fb.className = "fb on " + (ok ? "ok" : "no");
+      fb.textContent = ok ? (tr ? "Doğru!" : "Richtig!") : (tr ? "Doğrusu: " : "Richtig ist: ") + ART[this.w[1]] + " " + this.w[0];
+      const c = $("#combo"); c.textContent = "×" + this.combo; c.classList.toggle("on", this.combo >= 3);
+      const bar = $("#qbar"); bar.style.width = Math.min(100, (this.done % 10 || 10) * 10) + "%"; bar.style.background = this.combo >= 3 ? "var(--warm)" : "var(--good)";
+      setTimeout(() => {
+        arts.classList.remove("locked"); right.classList.remove("right"); btn.classList.remove("shake");
+        fb.classList.remove("on"); this.i++; this.render(); this.busy = false;
+      }, ok ? 850 : 1700);
+    }
+  };
+  $$("#arts button").forEach(b => b.onclick = () => quiz.answer(b));
+  window.addEventListener("keydown", e => { const k = { "1": "m", "2": "f", "3": "n" }[e.key]; if (k && $("#quiz").getBoundingClientRect().top < innerHeight) quiz.answer($(`#arts [data-a="${k}"]`)); });
+
+  // ---------- models table ----------
+  const M = [["Gemma 4 E4B", "3,66 GB", "8 GB", 5, 3, true], ["Gemma 4 E2B", "2,59 GB", "6 GB", 4, 4], ["Qwen3 4B Instruct", "2,66 GB", "6 GB", 4, 3], ["Qwen3.5 4B", "2,75 GB", "6 GB", 4, 3], ["Ministral 3 3B", "2,34 GB", "5 GB", 3, 4]];
+  const meter = n => `<span class="meter">${[1,2,3,4,5].map(i => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
+  $("#modelRows").innerHTML = M.map(m => `<tr><td>${m[0]}${m[5] ? '<span class="rec">S25+</span>' : ""}</td><td>${m[1]}</td><td>${m[2]}</td><td>${meter(m[3])}</td><td>${meter(m[4])}</td></tr>`).join("");
+
+  // ---------- smooth <details> ----------
+  $$("details").forEach(d => {
+    const s = $("summary", d), body = $(".body", d);
+    s.addEventListener("click", e => {
+      if (reduce) return;
+      e.preventDefault();
+      if (d.open) {
+        const h = body.offsetHeight;
+        body.animate([{ height: h + "px", opacity: 1 }, { height: "0px", opacity: 0 }], { duration: 380, easing: "cubic-bezier(.22,1,.36,1)" }).onfinish = () => d.open = false;
+      } else {
+        d.open = true;
+        const h = body.offsetHeight;
+        body.animate([{ height: "0px", opacity: 0 }, { height: h + "px", opacity: 1 }], { duration: 520, easing: "cubic-bezier(.22,1,.36,1)" });
+      }
+    });
+  });
+
+  // ---------- start ----------
+  let lang = "de";
+  try { lang = localStorage.getItem("kelimo.lang") || ((navigator.language || "").startsWith("tr") ? "tr" : "de"); } catch (e) {}
+  setLang(lang);
+  syncShots();
+  addEventListener("resize", () => { movePill($("nav .seg")); movePill(galSeg); });
+  document.fonts && document.fonts.ready.then(() => { movePill($("nav .seg")); movePill(galSeg); });
+})();
+</script>
+</body>
+</html>
