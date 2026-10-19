@@ -193,7 +193,7 @@ fun TopBar(title: String?, onBack: (() -> Unit)?, modifier: Modifier = Modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) IconBtn(Icons.AutoMirrored.Rounded.ArrowBack, "back", onBack) else Spacer(Modifier.width(12.dp))
-        if (title != null) Text(title, style = K.t.headline, color = K.c.ink, modifier = Modifier.weight(1f).padding(start = 4.dp))
+        if (title != null) Text(title, style = K.t.headline, color = K.c.ink, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp))
         else Spacer(Modifier.weight(1f))
         actions()
     }
@@ -211,7 +211,7 @@ fun Pill(text: String, color: Color = K.c.accentSoft, fg: Color = K.c.accent, ic
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) { Icon(icon, null, tint = fg, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp)) }
-        Text(text, style = K.t.caption, color = fg)
+        Text(text, style = K.t.caption, color = fg, maxLines = 1, softWrap = false)
     }
 }
 

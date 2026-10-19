@@ -44,6 +44,10 @@ data class Settings(
     val sounds: Boolean = true,
     val ttsRate: Float = 0.95f,
     val autoplayAudio: Boolean = true,
+    /** Only the on-device recognizer; never fall back to the system speech service. */
+    val strictOfflineSpeech: Boolean = false,
+    /** Ask GitHub once a day whether a newer version exists. Off = the app never goes online. */
+    val updateCheck: Boolean = true,
     /** Second, independent model pass that must agree before a correction is shown. */
     val doubleCheck: Boolean = true,
     val showTranslations: Boolean = true,
@@ -51,6 +55,9 @@ data class Settings(
     val listeningExercises: Boolean = true,
     val backend: Backend = Backend.GPU,
     val reminderHour: Int = -1,
+    /** Speech engine package (null = system default) and chosen voice per language code. */
+    val ttsEngine: String? = null,
+    val voices: Map<String, String> = emptyMap(),
     val reduceMotion: Boolean = false,
 )
 
@@ -118,6 +125,16 @@ data class Stats(
 ) {
     fun xpOn(day: LocalDate): Int = xpByDay[day.toString()] ?: 0
 
+    fun active(d: LocalDate): Boolean = xpOn(d) > 0 || d.toString() in frozenDays
+
+    /** Longest run of consecutive active days ever. */
+    fun longestStreak(): Int {
+        val days = (xpByDay.filterValues { it > 0 }.keys + frozenDays).mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSortedSet()
+        var best = 0; var run = 0; var prev: LocalDate? = null
+        for (d in days) { run = if (prev != null && prev.plusDays(1) == d) run + 1 else 1; best = maxOf(best, run); prev = d }
+        return best
+    }
+
     fun streak(today: LocalDate = LocalDate.now()): Int {
         fun active(d: LocalDate) = xpOn(d) > 0 || d.toString() in frozenDays
         var d = if (active(today)) today else today.minusDays(1)
@@ -154,6 +171,8 @@ data class ChatMsg(
     val text: String,
     val translation: String? = null,
     val correction: Correction? = null,
+    /** A more natural way to say the learner's message (not a mistake). */
+    val tip: Tip? = null,
     val suggestions: List<String> = emptyList(),
 )
 
@@ -164,3 +183,6 @@ data class Correction(
     /** false when the verifier disagreed or the edit was suspiciously large. */
     val verified: Boolean,
 )
+
+@Serializable
+data class Tip(val better: String, val why: String)

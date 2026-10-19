@@ -36,6 +36,7 @@ import app.kelimo.learn.Progress
 import app.kelimo.learn.Reminders
 import app.kelimo.ui.LocalNav
 import app.kelimo.ui.LocalT
+import app.kelimo.ui.Route
 import app.kelimo.ui.components.*
 import app.kelimo.ui.theme.K
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +55,7 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
     var msg by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
+    var confirmRestore by remember { mutableStateOf<java.io.File?>(null) }
     fun set(f: (Settings) -> Settings) = app.store.update { it.copy(settings = f(it.settings)) }
 
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -101,10 +103,15 @@ fun SettingsScreen() {
                 Slider(st.ttsRate, { v -> set { it.copy(ttsRate = v) } }, valueRange = 0.6f..1.3f, onValueChangeFinished = { app.tts.rate = app.store.value.settings.ttsRate; app.tts.speak("Hallo, wie geht es dir?") },
                     colors = SliderDefaults.colors(thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.surface2))
             }
+            Spacer(Modifier.height(10.dp))
+            KCard(Modifier.fillMaxWidth(), padding = PaddingValues(vertical = 4.dp)) {
+                LinkRow(Icons.Rounded.RecordVoiceOver, t("voice.title"), null) { nav.push(Route.Voices) }
+            }
 
             SectionTitle(t("settings.ai"))
             KCard(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
                 ToggleRow(t("settings.doubleCheck"), t("settings.doubleCheck.sub"), st.doubleCheck) { v -> set { it.copy(doubleCheck = v) } }
+                ToggleRow(t("settings.strictSpeech"), t("settings.strictSpeech.sub"), st.strictOfflineSpeech) { v -> set { it.copy(strictOfflineSpeech = v) } }
                 ToggleRow(t("settings.gpu"), t("settings.gpu.sub"), st.backend == Backend.GPU) { v ->
                     set { it.copy(backend = if (v) Backend.GPU else Backend.CPU) }
                     scope.launch { app.llm.unload(); app.warmUpModel() }
@@ -134,13 +141,34 @@ fun SettingsScreen() {
                 }
             }
 
+            SectionTitle(t("update.title"))
+            KCard(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                ToggleRow(t("settings.updates"), t("settings.updates.sub"), st.updateCheck) { v -> set { it.copy(updateCheck = v) } }
+            }
+
             SectionTitle(t("settings.data"))
             KCard(Modifier.fillMaxWidth(), padding = PaddingValues(vertical = 4.dp)) {
+                app.store.latestBackup()?.let { f ->
+                    LinkRow(Icons.Rounded.SettingsBackupRestore, t("settings.restore"), null) { confirmRestore = f }
+                }
                 LinkRow(Icons.Rounded.Upload, t("settings.export"), null) { export.launch("kelimo-backup.json") }
                 LinkRow(Icons.Rounded.Download, t("settings.import"), null) { import.launch(arrayOf("application/json", "*/*")) }
                 LinkRow(Icons.Rounded.RestartAlt, t("settings.reset"), null) { confirmReset = true }
             }
             msg?.let { Text(it, style = K.t.caption, color = c.ink2, modifier = Modifier.padding(8.dp)) }
+            confirmRestore?.let { f ->
+                KCard(Modifier.fillMaxWidth().padding(top = 10.dp), color = c.warmSoft) {
+                    Text(t("settings.restore.confirm"), style = K.t.bodyStrong, color = c.ink)
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        KButton(t("settings.restore"), {
+                            confirmRestore = null
+                            msg = runCatching { app.store.importJson(f.readText()); t("settings.imported") }.getOrElse { t("settings.importFailed") }
+                        }, height = 40.dp)
+                        KButton(t("common.cancel"), { confirmRestore = null }, style = BtnStyle.Secondary, height = 40.dp)
+                    }
+                }
+            }
             if (confirmReset) KCard(Modifier.fillMaxWidth().padding(top = 10.dp), color = c.badSoft) {
                 Text(t("settings.reset.confirm"), style = K.t.bodyStrong, color = c.ink)
                 Spacer(Modifier.height(10.dp))
@@ -173,12 +201,8 @@ fun PrivacyScreen() {
     val c = K.c
     val ctx = LocalContext.current
     val target = Lang.of(app.store.value.profile.target)
-    // Checked at runtime against what the OS actually granted, not what we claim.
-    val perms = remember {
-        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions?.toList().orEmpty() }.getOrDefault(emptyList())
-    }
-    val noInternet = Manifest.permission.INTERNET !in perms
-    val sttLocal = app.stt.available
+    val updates = app.store.value.settings.updateCheck
+    val sttOnDevice = app.stt.onDeviceAvailable && !app.stt.usingFallback.value
     val ttsLocal = remember { app.tts.hasOfflineVoice(target.locale) }
     val noBackup = (ctx.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_ALLOW_BACKUP) == 0
 
@@ -186,24 +210,24 @@ fun PrivacyScreen() {
         TopBar(t("privacy.title"), { nav.pop() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(88.dp).clip(CircleShape).background(if (noInternet) c.goodSoft else c.badSoft), contentAlignment = Alignment.Center) {
-                    Icon(if (noInternet) Icons.Rounded.WifiOff else Icons.Rounded.Wifi, null, tint = if (noInternet) c.good else c.bad, modifier = Modifier.size(42.dp))
+                Box(Modifier.size(88.dp).clip(CircleShape).background(c.goodSoft), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Shield, null, tint = c.good, modifier = Modifier.size(42.dp))
                 }
             }
-            Text(t(if (noInternet) "privacy.headline" else "privacy.headline.bad"), style = K.t.title, color = c.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(t("privacy.headline2"), style = K.t.title, color = c.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(6.dp))
-            Text(t("privacy.body"), style = K.t.body, color = c.ink2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(t("privacy.body2"), style = K.t.body, color = c.ink2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             SectionTitle(t("privacy.checks"))
             KCard(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)) {
-                Check(t("privacy.c.internet"), noInternet)
+                Check(t(if (updates) "privacy.c.updates" else "privacy.c.offline"), true)
                 Check(t("privacy.c.model"), true)
-                Check(t(if (sttLocal) "privacy.c.stt" else "privacy.c.stt.no"), sttLocal)
+                Check(t(if (sttOnDevice) "privacy.c.stt" else if (app.store.value.settings.strictOfflineSpeech) "privacy.c.stt.no" else "privacy.c.stt.system"), sttOnDevice)
                 Check(t(if (ttsLocal) "privacy.c.tts" else "privacy.c.tts.no"), ttsLocal)
                 Check(t("privacy.c.backup"), noBackup)
                 Check(t("privacy.c.tracking"), true)
             }
             Text(t("privacy.how"), style = K.t.caption, color = c.ink3, modifier = Modifier.padding(top = 12.dp, start = 4.dp, end = 4.dp))
-            if (!sttLocal || !ttsLocal) Text(t("privacy.voiceHint"), style = K.t.caption, color = c.warm, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
+            if (!sttOnDevice || !ttsLocal) Text(t("privacy.voiceHint"), style = K.t.caption, color = c.warm, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -280,4 +304,66 @@ private fun finish(p: Placement, course: Course): String {
     val below = course.units.filter { Adaptive.levels.indexOf(it.cefr) < idx }.flatMap { u -> u.lessons.map { it.id } }
     Progress.applyPlacement(app.store, level, below)
     return level
+}
+
+// ============================================================== voice picker
+
+private val samples = mapOf(
+    "de" to "Hallo! Schön, dass du da bist. Wie war dein Tag?",
+    "tr" to "Merhaba! Bugün nasılsın? Hadi biraz konuşalım.",
+    "en" to "Hi there! How was your day? Let's practise a little.",
+    "es" to "¡Hola! ¿Qué tal tu día?",
+    "fr" to "Bonjour ! Comment s'est passée ta journée ?",
+    "it" to "Ciao! Com'è andata la tua giornata?",
+)
+
+/** Lists every installed offline voice for the target and native language, across all speech engines. */
+@Composable
+fun VoicesScreen() {
+    val app = KelimoApp.instance
+    val t = LocalT.current
+    val nav = LocalNav.current
+    val c = K.c
+    val ctx = LocalContext.current
+    val s by app.store.state.collectAsStateWithLifecycle()
+    val langs = listOf(Lang.of(s.profile.target), Lang.of(s.profile.native)).distinct()
+    val voices = remember { mutableStateMapOf<String, List<app.kelimo.speech.VoiceOption>>() }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) { langs.forEach { l -> voices[l.code] = app.tts.listVoices(l.locale) } }
+
+    Screen {
+        TopBar(t("voice.title"), { nav.pop() })
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+            Text(t("voice.body"), style = K.t.body, color = c.ink2)
+            langs.forEach { l ->
+                SectionTitle("${l.flag} ${l.endonym}")
+                val list = voices[l.code]
+                when {
+                    list == null -> ProgressBar(0.3f, Modifier.fillMaxWidth())
+                    list.isEmpty() -> KCard(Modifier.fillMaxWidth(), color = c.warmSoft) {
+                        Text(t("voice.none"), style = K.t.body, color = c.ink)
+                        Spacer(Modifier.height(10.dp))
+                        KButton(t("voice.install"), { runCatching { ctx.startActivity(app.tts.installVoiceIntent()) } }, style = BtnStyle.Secondary, height = 44.dp)
+                    }
+                    else -> list.forEachIndexed { i, v ->
+                        val chosen = s.settings.voices[l.code] == v.name && (s.settings.ttsEngine ?: app.tts.currentEngine) == v.engine
+                        SelectRow(
+                            "${t("voice.voice")} ${'A' + i}", chosen, {
+                                app.store.update { st -> st.copy(settings = st.settings.copy(ttsEngine = v.engine, voices = st.settings.voices + (l.code to v.name))) }
+                                app.tts.useEngine(v.engine)
+                                app.tts.preferred = app.store.value.settings.voices
+                                scope.launch { app.tts.say(samples[l.code] ?: l.endonym, lang = l.locale) }
+                            }, Modifier.padding(vertical = 4.dp),
+                            subtitle = "${v.engineLabel} · ${t(if (v.quality >= 400) "voice.q.vhigh" else if (v.quality >= 300) "voice.q.high" else "voice.q.normal")}",
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(t("voice.hint"), style = K.t.caption, color = c.ink3)
+            Spacer(Modifier.height(10.dp))
+            KButton(t("voice.install"), { runCatching { ctx.startActivity(app.tts.installVoiceIntent()) } }, style = BtnStyle.Ghost, height = 44.dp)
+            Spacer(Modifier.height(32.dp))
+        }
+    }
 }

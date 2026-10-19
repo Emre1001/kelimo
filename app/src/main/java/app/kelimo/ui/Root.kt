@@ -76,6 +76,8 @@ fun Root(state: AppState) {
                     Route.Stories -> StoriesScreen()
                     Route.AiLessons -> AiLessonsScreen()
                     Route.Placement -> PlacementScreen()
+                    Route.Voices -> VoicesScreen()
+                    Route.Streak -> StreakScreen()
                 }
             }
         }

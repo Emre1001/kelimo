@@ -19,6 +19,8 @@ val AppJson = Json {
     encodeDefaults = true
     explicitNulls = false
     isLenient = true
+    // Unknown enum values or nulls from another app version fall back to defaults instead of failing.
+    coerceInputValues = true
 }
 
 /**
@@ -26,7 +28,8 @@ val AppJson = Json {
  * Writes are debounced and atomic, so a crash mid-write never corrupts progress.
  */
 class Store(context: Context, private val scope: CoroutineScope) {
-    private val file = AtomicFile(File(context.filesDir, "state.json"))
+    private val dir = context.filesDir
+    private val file = AtomicFile(File(dir, "state.json"))
     private val _state = MutableStateFlow(load())
     val state: StateFlow<AppState> = _state
     private var pending: Job? = null
@@ -62,9 +65,30 @@ class Store(context: Context, private val scope: CoroutineScope) {
         if (!file.baseFile.exists()) AppState()
         else AppJson.decodeFromString(AppState.serializer(), file.readFully().decodeToString())
     } catch (e: Exception) {
-        Log.e("Store", "state unreadable, starting fresh", e)
+        // Never overwrite unreadable progress: park it next to the new file so it can be recovered.
+        Log.e("Store", "state unreadable, keeping a copy and starting fresh", e)
+        runCatching { file.baseFile.copyTo(File(dir, "state.unreadable-${System.currentTimeMillis()}.json")) }
         AppState()
     }
+
+    /**
+     * Called once per launch with the installed version. After an update the previous state file is
+     * copied to state.backup-v<old>.json first, so an update can never cost progress.
+     */
+    fun backupOnUpgrade(versionCode: Long) {
+        val marker = File(dir, "version")
+        // 1.0.0 wrote no marker: an existing state without one comes from version 1.
+        val old = runCatching { marker.readText().trim().toLong() }.getOrNull() ?: if (file.baseFile.exists()) 1L else null
+        if (old != null && old != versionCode && file.baseFile.exists()) {
+            runCatching { file.baseFile.copyTo(File(dir, "state.backup-v$old.json"), overwrite = true) }
+            // Keep the three newest backups.
+            dir.listFiles { f -> f.name.startsWith("state.backup-v") }?.sortedByDescending { it.lastModified() }?.drop(3)?.forEach { it.delete() }
+        }
+        runCatching { marker.writeText(versionCode.toString()) }
+    }
+
+    /** Newest automatic backup, if any. */
+    fun latestBackup(): File? = dir.listFiles { f -> f.name.startsWith("state.backup-v") }?.maxByOrNull { it.lastModified() }
 
     @Synchronized
     private fun save(s: AppState) {

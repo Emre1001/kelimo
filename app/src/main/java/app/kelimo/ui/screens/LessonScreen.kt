@@ -109,6 +109,8 @@ fun LessonScreen(kind: SessionKind) {
     var firstTryTotal by remember { mutableIntStateOf(0) }
     var showQuit by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
+    var celebrate by remember { mutableStateOf(false) }
+    val firstToday = remember { app.store.value.stats.xpOn(java.time.LocalDate.now()) == 0 }
     val started = remember { System.currentTimeMillis() }
     // One holder per exercise: the outgoing exercise keeps composing during the transition and must not touch the new one.
     val holders = remember { mutableMapOf<Int, AnswerHolder>() }
@@ -130,8 +132,16 @@ fun LessonScreen(kind: SessionKind) {
         val acc = if (firstTryTotal == 0) 1.0 else firstTryRight.toDouble() / firstTryTotal
         10 + (if (acc >= 0.9) 5 else 0) + (if (bestCombo >= 5) 3 else 0)
     }
+    if (celebrate) {
+        val st = app.store.value.stats
+        StreakCelebration(st.streak(), st) { nav.pop() }
+        return
+    }
     if (finished) {
-        DoneScreen(xp, firstTryRight, firstTryTotal, bestCombo, (System.currentTimeMillis() - started) / 1000) { nav.pop() }
+        DoneScreen(xp, firstTryRight, firstTryTotal, bestCombo, (System.currentTimeMillis() - started) / 1000) {
+            // First lesson of the day extends the streak: show it before leaving.
+            if (firstToday) celebrate = true else nav.pop()
+        }
         return
     }
 
@@ -531,7 +541,7 @@ private fun SpeakView(ex: Exercise.Speak, target: Lang, locked: Boolean, onAuto:
     var permDenied by remember { mutableStateOf(false) }
     val perm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         permDenied = !ok
-        if (ok) app.stt.start(target.locale)
+        if (ok) app.stt.start(target.locale, app.store.value.settings.strictOfflineSpeech)
     }
     LaunchedEffect(Unit) { app.stt.reset() }
     LaunchedEffect(stt) {
@@ -573,7 +583,7 @@ private fun SpeakView(ex: Exercise.Speak, target: Lang, locked: Boolean, onAuto:
                     .pressable(enabled = !locked, scaleTo = 0.9f) {
                         if (listening) app.stt.finish()
                         else if (ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) perm.launch(Manifest.permission.RECORD_AUDIO)
-                        else { app.tts.stop(); result = null; app.stt.start(target.locale) }
+                        else { app.tts.stop(); result = null; app.stt.start(target.locale, app.store.value.settings.strictOfflineSpeech) }
                     },
                 contentAlignment = Alignment.Center,
             ) { Icon(if (listening) Icons.Rounded.Stop else Icons.Rounded.Mic, null, tint = Color.White, modifier = Modifier.size(40.dp)) }

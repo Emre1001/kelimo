@@ -10,6 +10,7 @@ import app.kelimo.data.AiLesson
 import app.kelimo.data.AiPair
 import app.kelimo.data.ChatMsg
 import app.kelimo.data.Correction
+import app.kelimo.data.Tip
 import app.kelimo.learn.Grader
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -66,13 +67,15 @@ class Tutor(private val llm: LlmEngine) {
           "correction_needed":{"type":"boolean"},
           "corrected":{"type":"string"},
           "explanation":{"type":"string"},
+          "more_natural":{"type":"string"},
+          "natural_why":{"type":"string"},
           "reply":{"type":"string"},
           "reply_translation":{"type":"string"},
           "suggestions":{"type":"array","items":{"type":"string"}}
-        },"required":["correction_needed","corrected","explanation","reply","reply_translation","suggestions"]}
+        },"required":["correction_needed","corrected","explanation","more_natural","natural_why","reply","reply_translation","suggestions"]}
     """.trimIndent()
 
-    data class ChatResult(val userCorrection: Correction?, val reply: ChatMsg)
+    data class ChatResult(val userCorrection: Correction?, val tip: Tip?, val reply: ChatMsg)
 
     private fun chatSystem(c: LearnerCtx, s: Scenario) = base(c) + """
 
@@ -83,6 +86,8 @@ class Tutor(private val llm: LlmEngine) {
         - correction_needed: true only for real grammar, word-choice or spelling mistakes in the learner's last message.
         - corrected: the learner's message with minimal changes (keep their words). Copy it unchanged if no mistake.
         - explanation: why, in ${c.native.endonym}. Empty if no mistake.
+        - more_natural: how a native speaker would naturally say the learner's message, in ${c.target.endonym}, at the learner's level. Empty if the message is already natural.
+        - natural_why: one short sentence in ${c.native.endonym} on what makes it more natural. Empty if more_natural is empty.
         - reply: your next line in the role-play, in ${c.target.endonym} only, at the learner's level.
         - reply_translation: the reply translated into ${c.native.endonym}.
         - suggestions: two short possible answers the learner could give next, in ${c.target.endonym}.
@@ -96,7 +101,7 @@ class Tutor(private val llm: LlmEngine) {
             temperature = 0.7, schema = schema,
         )
         val o = llm.json(req, streamField("reply", onText)) ?: return null
-        val reply = o.str("reply")?.takeIf { it.isNotBlank() } ?: return null
+        val reply = o.str("reply")?.takeIf { it.isNotBlank() && !wrongLanguage(c, it) } ?: return null
         return ChatMsg(false, clean(reply), o.str("reply_translation")?.let(::clean), suggestions = o.strList("suggestions").map(::clean).take(2))
     }
 
@@ -110,7 +115,7 @@ class Tutor(private val llm: LlmEngine) {
                 streamField("reply", onText),
             ) ?: continue
             val reply = o.str("reply").orEmpty()
-            val wrongLang = c.target != c.native && !LangDetect.looksLike(reply, c.target, c.native)
+            val wrongLang = wrongLanguage(c, reply)
             result = o
             if (reply.isNotBlank() && !wrongLang) break
         }
@@ -123,11 +128,17 @@ class Tutor(private val llm: LlmEngine) {
             explanation = o.str("explanation").orEmpty(),
             doubleCheck = doubleCheck,
         )
+        val tip = checkedTip(c, userText, correction?.corrected, o.str("more_natural").orEmpty(), o.str("natural_why").orEmpty())
         return ChatResult(
-            correction,
+            correction, tip,
             ChatMsg(false, reply, o.str("reply_translation")?.let(::clean)?.takeIf { it.isNotBlank() }, suggestions = o.strList("suggestions").map(::clean).filter { it.isNotBlank() }.take(2)),
         )
     }
+
+    /** Reply not in the target language, e.g. a small model echoing the (English) instructions. */
+    private fun wrongLanguage(c: LearnerCtx, reply: String): Boolean =
+        (c.target != c.native && !LangDetect.looksLike(reply, c.target, c.native)) ||
+            (c.target != Lang.EN && !LangDetect.looksLike(reply, c.target, Lang.EN))
 
     /** Guard + verifier for a proposed correction. Returns null when there is nothing trustworthy to show. */
     suspend fun checkedCorrection(c: LearnerCtx, original: String, needed: Boolean, corrected: String, explanation: String, doubleCheck: Boolean): Correction? {
@@ -142,6 +153,43 @@ class Tutor(private val llm: LlmEngine) {
         if (doubleCheck) verified = verified && verify(c, original, corrected) ?: false
         if (doubleCheck && !verified) return null
         return Correction(clean(corrected), clean(expl), verified)
+    }
+
+    /**
+     * A "say it more naturally" suggestion. Not a correction, so no verifier pass, but it must be in
+     * the target language, actually different, and close enough to what the learner meant.
+     */
+    fun checkedTip(c: LearnerCtx, original: String, corrected: String?, better: String, why: String): Tip? {
+        val b = clean(better)
+        if (b.isBlank() || b.length > original.length * 2 + 40) return null
+        val nb = Grader.normalize(b)
+        if (nb == Grader.normalize(original) || (corrected != null && nb == Grader.normalize(corrected))) return null
+        if (c.target != c.native && !LangDetect.looksLike(b, c.target, c.native)) return null
+        if (Grader.changeRatio(original, b) > 0.85 && original.split(' ').size > 2) return null
+        val w = clean(why).takeIf { it.isNotBlank() && (c.native == c.target || LangDetect.looksLike(it, c.native, c.target)) }.orEmpty()
+        return Tip(b, w)
+    }
+
+    data class Feedback(val summary: String, val focus: List<String>)
+
+    /**
+     * End-of-conversation feedback. Grounded only on the corrections that were actually shown;
+     * with none, the model is not asked to find any.
+     */
+    suspend fun conversationFeedback(c: LearnerCtx, items: List<Pair<String, String>>): Feedback? {
+        if (items.isEmpty()) return null
+        val list = items.take(12).joinToString("\n") { (wrong, right) -> "- \"$wrong\" -> \"$right\"" }
+        val schema = """{"type":"object","properties":{"summary":{"type":"string"},"focus":{"type":"array","items":{"type":"string"}}},"required":["summary","focus"]}"""
+        val o = llm.json(
+            LlmRequest(
+                system = base(c) + "\nYou give short, warm, concrete feedback after a conversation. Only talk about the corrections listed. Never invent other mistakes.",
+                user = "Corrections from this conversation:\n$list\n\nIn ${c.native.endonym}: summary = 2 sentences on what went well and the main pattern in the mistakes. focus = up to 3 short, concrete things to practise next.",
+                temperature = 0.3, schema = schema, maxChars = 1200,
+            )
+        ) ?: return null
+        val summary = clean(o.str("summary").orEmpty())
+        if (summary.isBlank()) return null
+        return Feedback(summary, o.strList("focus").map(::clean).filter { it.isNotBlank() }.take(3))
     }
 
     /** Independent second opinion at temperature 0. Null when the model gave no usable answer. */

@@ -31,6 +31,9 @@ import app.kelimo.ui.components.*
 import app.kelimo.ui.theme.K
 import app.kelimo.ui.theme.Motion
 import java.time.LocalDate
+import app.kelimo.update.UpdateState
+import app.kelimo.update.Updater
+import kotlinx.coroutines.launch
 import java.time.format.TextStyle
 
 @Composable
@@ -59,7 +62,7 @@ fun MeTab() {
         }
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatBox("${s.stats.streak()}", t("me.streak"), c.warm, Modifier.weight(1f))
+            StatBox("${s.stats.streak()}", t("me.streak"), c.warm, Modifier.weight(1f).pressable(scaleTo = 0.95f) { nav.push(Route.Streak) })
             StatBox("${s.stats.totalXp}", "XP", c.accent, Modifier.weight(1f))
             StatBox(s.course.cefr, t("me.level"), c.good, Modifier.weight(1f))
         }
@@ -90,6 +93,14 @@ fun MeTab() {
         }
 
         SectionTitle(t("me.app"))
+        val upd by Updater.state.collectAsStateWithLifecycle()
+        if (s.settings.updateCheck) KCard(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+            UpdateContent(upd, banner = false)
+            if (upd !is UpdateState.Available && upd !is UpdateState.Downloading && upd !is UpdateState.Ready && upd !is UpdateState.Dismissed) {
+                Spacer(Modifier.height(10.dp))
+                KButton(t("update.check"), { app.scope.launch { Updater.check(app, force = true) } }, style = BtnStyle.Secondary, height = 42.dp, loading = upd is UpdateState.Checking)
+            }
+        }
         KCard(Modifier.fillMaxWidth(), padding = PaddingValues(vertical = 4.dp)) {
             LinkRow(Icons.Rounded.Memory, t("models.title"), when (engine) {
                 is EngineState.NoModel -> t("model.none")

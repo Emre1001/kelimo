@@ -24,13 +24,16 @@ class KelimoApp : Application() {
     lateinit var modelFiles: ModelFiles; private set
     lateinit var llm: LlmEngine; private set
     lateinit var tutor: Tutor; private set
-    val tts by lazy { Tts(this) }
+    val tts by lazy {
+        Tts(this).also { t -> store.value.settings.let { t.useEngine(it.ttsEngine); t.preferred = it.voices; t.rate = it.ttsRate } }
+    }
     val stt by lazy { Stt(this) }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         store = Store(this, scope)
+        store.backupOnUpgrade(packageManager.getPackageInfo(packageName, 0).longVersionCode)
         courses = CourseRepository(this)
         modelFiles = ModelFiles(this)
         llm = LlmEngine(this, modelFiles)

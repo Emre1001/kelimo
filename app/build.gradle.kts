@@ -13,8 +13,20 @@ android {
         applicationId = "app.kelimo"
         minSdk = 31 // on-device SpeechRecognizer needs API 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
+    }
+
+    signingConfigs {
+        // Same key as v1.0.0 (a copy of the original debug key). Updates only install over the old
+        // version, keeping all progress, if every release is signed with this exact key: back it up.
+        create("kelimo") {
+            val ks = file("${System.getProperty("user.home")}/.android/kelimo-release.keystore")
+            storeFile = if (ks.exists()) ks else file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -23,8 +35,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the APK installs directly. Use your own keystore for store releases.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("kelimo")
         }
     }
     compileOptions {

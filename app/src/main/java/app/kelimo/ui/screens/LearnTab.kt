@@ -53,6 +53,7 @@ fun LearnTab() {
 
     LazyColumn(Modifier.fillMaxSize().background(K.c.bg), state = listState, contentPadding = PaddingValues(bottom = BottomBarSpace)) {
         item { Header(target, s.course.cefr, s.stats.streak(), s.stats.xpOn(LocalDate.now()), s.profile.dailyGoalXp, s.stats.freezes) }
+        item { UpdateBanner(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) }
 
         if (due > 0) item {
             KCard(Modifier.padding(horizontal = 20.dp, vertical = 6.dp).fillMaxWidth(), onClick = { nav.push(Route.Drill("review")) }, color = K.c.accent) {
@@ -98,7 +99,7 @@ fun LearnTab() {
     // Scroll to the current lesson the first time.
     LaunchedEffect(currentId) {
         if (currentId != null && listState.firstVisibleItemIndex == 0) {
-            var i = 1 + (if (due > 0) 1 else 0) + (if (!target.curated) 1 else 0)
+            var i = 2 + (if (due > 0) 1 else 0) + (if (!target.curated) 1 else 0)
             for (u in course.units) { i++; val j = u.lessons.indexOfFirst { it.id == currentId }; if (j >= 0) { i += j; break } else i += u.lessons.size }
             if (i > 4) listState.animateScrollToItem((i - 2).coerceAtLeast(0))
         }
@@ -118,15 +119,22 @@ private fun Header(target: Lang, cefr: String, streak: Int, xpToday: Int, goal: 
                 Pill(cefr)
             }
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.LocalFireDepartment, null, tint = if (streak > 0) K.c.warm else K.c.ink3, modifier = Modifier.size(18.dp))
-                Text(" $streak ${t("home.days")}", style = K.t.label, color = K.c.ink2)
+            val nav = LocalNav.current
+            val lit = xpToday > 0
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(if (lit) K.c.warmSoft else K.c.surface2)
+                    .pressable(scaleTo = 0.94f) { nav.push(Route.Streak) }.padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.LocalFireDepartment, null, tint = if (lit) K.c.warm else K.c.ink3, modifier = Modifier.size(18.dp))
+                Text(" $streak ${t("home.days")}", style = K.t.label, color = if (lit) K.c.ink else K.c.ink2)
                 if (freezes > 0) {
-                    Spacer(Modifier.width(12.dp))
-                    Icon(Icons.Rounded.AcUnit, null, tint = K.c.accent, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Icon(Icons.Rounded.AcUnit, null, tint = K.c.accent, modifier = Modifier.size(15.dp))
                     Text(" $freezes", style = K.t.label, color = K.c.ink2)
                 }
             }
+            if (!lit && streak > 0) Text(t("streak.atRiskShort"), style = K.t.caption, color = K.c.warm, modifier = Modifier.padding(top = 4.dp, start = 2.dp))
         }
         Ring(xpToday / goal.toFloat(), size = 58.dp, color = if (xpToday >= goal) K.c.good else K.c.accent) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

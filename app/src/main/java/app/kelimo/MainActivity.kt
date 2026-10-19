@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.kelimo.learn.Progress
 import app.kelimo.ui.Root
 import app.kelimo.ui.theme.KelimoTheme
+import app.kelimo.update.Updater
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -21,6 +22,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val app = application as KelimoApp
         Progress.applyFreeze(app.store)
+        if (app.store.value.onboarded) app.scope.launch { Updater.check(app) }
         setContent {
             val state by app.store.state.collectAsStateWithLifecycle()
             KelimoTheme(state.settings.theme, state.settings.reduceMotion) {

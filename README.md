@@ -5,13 +5,13 @@
 # Kelimo
 
 **Sprachen lernen mit einem KI-Tutor, der komplett auf deinem Handy läuft.**<br>
-Kein Internet. Kein Konto. Kein Abo. Kein Server sieht je ein Wort.
+Kein Konto. Kein Abo. Kein Server sieht je ein Wort, das du schreibst oder sagst.
 
 [![Download APK](https://img.shields.io/badge/APK-herunterladen-2E5BE6?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Emre1001/kelimo/releases/latest/download/kelimo.apk)
 [![Website](https://img.shields.io/badge/Website-ansehen-15171C?style=for-the-badge)](https://emre1001.github.io/kelimo/)
 
 ![Android 12+](https://img.shields.io/badge/Android-12%2B-178A5B)
-![Offline](https://img.shields.io/badge/Internet--Berechtigung-keine-178A5B)
+![Offline](https://img.shields.io/badge/Lerndaten-bleiben%20auf%20dem%20Handy-178A5B)
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-2E5BE6)
 ![LiteRT-LM](https://img.shields.io/badge/KI-LiteRT--LM%20on--device-E59A1A)
 ![License](https://img.shields.io/badge/Lizenz-MIT-8D9097)
@@ -33,7 +33,9 @@ Kelimo (von türkisch *kelime*, „Wort“) ist eine Android-App zum Sprachenler
 
 | | |
 |---|---|
-| 🔒 **100 % privat** | Die App fordert **keine Internet-Berechtigung** an. Android blockiert jede Verbindung. In der App nachprüfbar. |
+| 🔒 **100 % privat** | KI, Stimme, Spracherkennung und Fortschritt bleiben auf dem Handy. Einzige Verbindung: optionaler Update-Check bei GitHub. |
+| 🔄 **Updates in der App** | Neue Version wird angezeigt und per Tipp installiert. Fortschritt bleibt, vorher wird automatisch gesichert. |
+| 🔥 **Serien** | Tägliche Serie mit Kalender, Meilensteinen und Serienschutz. |
 | 🧠 **Modell frei wählbar** | Jedes `.litertlm`-Modell läuft. Neue Modelle einfach importieren. |
 | ✅ **Gegen Halluzinationen gebaut** | Bewertung ohne KI, Schema-gebundene Ausgabe, Faktenprüfung, unabhängige Zweitmeinung. |
 | 🎯 **Passt sich an** | Elo-Modell pro Fähigkeit, Spaced Repetition, adaptiver Einstufungstest. |
@@ -90,6 +92,9 @@ Kelimo nutzt ausschließlich **On-Device-Spracherkennung** (`SpeechRecognizer.cr
 <summary><b>💬 Sprechen & Gespräche</b></summary>
 
 - **Freihändiger Sprachmodus:** Tutor spricht, hört zu, antwortet – in einer Schleife
+- **Sagt dir deine Fehler laut** (Erklärung in deiner Sprache, richtiger Satz in der Zielsprache) und wie es **natürlicher** klingt
+- **Auswertung** am Ende: alle Fehler, Tipps und was du als Nächstes üben solltest
+- **Stimmen-Auswahl:** alle installierten Offline-Stimmen (Samsung, Google …) zum Anhören und Auswählen
 - **12 Rollenspiele** aus dem Alltag in Deutschland: Bäckerei, Café, neue Nachbarin, Arzt, Termin am Telefon, Wohnungsbesichtigung, Bürgeramt, Bahnhof, Vorstellungsgespräch, Elterngespräch, Reklamation, freies Gespräch
 - Sanfte Korrekturen mit farbigem Wort-Diff und Erklärung in deiner Sprache
 - Übersetzung auf Tipp, Antwortvorschläge, langsame Wiedergabe
@@ -141,27 +146,24 @@ flowchart LR
 
 ## Datenschutz, technisch belegt
 
-```xml
-<!-- app/src/main/AndroidManifest.xml -->
-<uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-<application android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" …>
-```
+- **Lerndaten verlassen nie das Handy:** Modell, Spracherkennung, Sprachausgabe, Gespräche und Fortschritt laufen lokal.
+- **Einzige Netzwerkanfrage:** beim Start fragt [`Updater.kt`](app/src/main/java/app/kelimo/update/Updater.kt) `api.github.com` nach der neuesten Version. Gesendet wird nur diese Anfrage, keine Daten. In den Einstellungen abschaltbar – dann geht die App nie online.
+- **Sichere Updates:** Download nur von `github.com`, danach Prüfung von Paketname und Signatur. Passt sie nicht zur installierten App, wird die Datei verworfen.
+- **Kein Cloud-Backup** (`allowBackup="false"`), kein Konto, keine Werbung, kein Tracking.
+- **Spracherkennung:** zuerst On-Device; fehlt sie, der Android-Sprachdienst mit „offline bevorzugt“. Ein strenger Modus erlaubt nur On-Device.
 
-- Kein Netzwerkzugriff möglich (auch nicht durch Bibliotheken – die Berechtigung wird beim Build entfernt)
-- Modell, Spracherkennung und Sprachausgabe laufen lokal (Netzwerk-Stimmen werden übersprungen)
-- Fortschritt liegt als eine Datei im privaten App-Speicher, ausgeschlossen von Cloud-Backup
-- Der Bildschirm *Datenschutz* prüft das zur Laufzeit gegen die vom System gewährten Berechtigungen
+## Updates & Fortschritt
 
-Selbst prüfen: `aapt dump permissions kelimo.apk`
-
----
+- Neue Versionen erscheinen als Hinweis in der App und werden per Tipp installiert.
+- Alle Versionen sind mit demselben Schlüssel signiert, deshalb installiert Android sie **über** die alte Version: Fortschritt, Modelle und Einstellungen bleiben.
+- Vor jedem Update sichert Kelimo den Fortschritt automatisch (`state.backup-v<alt>.json`); wiederherstellbar unter *Einstellungen › Deine Daten*.
 
 ## Selbst bauen
 
 ```bash
 git clone https://github.com/Emre1001/kelimo.git
 cd kelimo
-./gradlew :app:testDebugUnitTest   # 22 Tests: Bewertung, SRS, Adaptivität, Kurs-Integrität
+./gradlew :app:testDebugUnitTest   # 25 Tests: Bewertung, SRS, Adaptivität, Kurs-Integrität
 ./gradlew :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
 

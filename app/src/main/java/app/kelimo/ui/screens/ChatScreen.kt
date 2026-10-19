@@ -2,6 +2,7 @@ package app.kelimo.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -34,16 +35,19 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.kelimo.KelimoApp
+import app.kelimo.ai.EngineState
 import app.kelimo.ai.Scenarios
 import app.kelimo.core.Lang
 import app.kelimo.core.loc
 import app.kelimo.data.ChatMsg
 import app.kelimo.data.ChatThread
 import app.kelimo.data.Correction
+import app.kelimo.data.Tip
 import app.kelimo.learn.Grader
 import app.kelimo.learn.Progress
 import app.kelimo.speech.SttState
@@ -87,7 +91,8 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
     val list = rememberLazyListState()
     val stt by app.stt.state.collectAsState()
     val level by app.stt.level.collectAsState()
-    val speaking by app.tts.speaking.collectAsState()
+    var talkJob by remember { mutableStateOf<Job?>(null) }
+    val engine by app.llm.state.collectAsState()
     val h = rememberHaptics()
 
     fun save(msgs: List<ChatMsg>) = app.store.update { st ->
@@ -95,19 +100,43 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
         st.copy(chats = (listOf(th) + st.chats.filter { it.id != id }).take(30))
     }
 
-    val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) { phase = Phase.Listening; app.stt.start(target.locale) } else error = t("err.mic") }
+    val strict = s0.settings.strictOfflineSpeech
+    val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) { phase = Phase.Listening; app.stt.start(target.locale, strict) } else error = t("err.mic") }
     fun listen() {
         if (ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { mic.launch(Manifest.permission.RECORD_AUDIO); return }
-        app.tts.stop(); phase = Phase.Listening; app.stt.start(target.locale)
+        talkJob?.cancel(); app.tts.stop(); error = null
+        phase = Phase.Listening; app.stt.start(target.locale, strict)
     }
 
-    fun speakReply(text: String) {
-        if (voice) { phase = Phase.Speaking; app.tts.speak(text) } else phase = Phase.Idle
+    val nativeLocale = Lang.of(s0.profile.native).locale
+
+    /**
+     * Reads the reply aloud (voice mode or autoplay), then, in voice mode, listens again.
+     * In voice mode the tutor first says what to fix (explanation in the native voice, the better
+     * sentence in the target voice), like a teacher would. Never waits on an event that may not come.
+     */
+    fun speakReply(text: String, correction: Correction? = null, tip: Tip? = null) {
+        talkJob?.cancel()
+        talkJob = scope.launch {
+            if (voice || app.store.value.settings.autoplayAudio) {
+                phase = Phase.Speaking
+                if (voice && correction != null) {
+                    app.tts.say(listOf(t("voice.fixIntro"), correction.explanation).filter { it.isNotBlank() }.joinToString(" "), lang = nativeLocale)
+                    app.tts.say(correction.corrected, slow = true, lang = target.locale)
+                } else if (voice && tip != null) {
+                    app.tts.say(listOf(t("voice.tipIntro"), tip.why).filter { it.isNotBlank() }.joinToString(" "), lang = nativeLocale)
+                    app.tts.say(tip.better, lang = target.locale)
+                }
+                if (!app.tts.say(text, lang = target.locale) && app.tts.voiceMissing.value) error = t("err.ttsMissing")
+            }
+            if (voice) listen() else phase = Phase.Idle
+        }
     }
 
     fun send(text: String) {
         val clean = text.trim()
         if (clean.isEmpty() || job?.isActive == true) return
+        talkJob?.cancel(); app.tts.stop(); app.stt.stop()
         input = ""; error = null
         h.tap()
         val history = messages
@@ -124,10 +153,10 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
             }.getOrNull()
             pending = null
             if (r == null) { error = t("err.generic"); phase = Phase.Idle; return@launch }
-            val updated = withUser.dropLast(1) + ChatMsg(true, clean, correction = r.userCorrection) + r.reply
+            val updated = withUser.dropLast(1) + ChatMsg(true, clean, correction = r.userCorrection, tip = r.tip) + r.reply
             save(updated)
             if (r.userCorrection != null) h.reject()
-            speakReply(r.reply.text)
+            speakReply(r.reply.text, r.userCorrection, r.tip)
         }
     }
 
@@ -147,11 +176,6 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
             }
         }
     }
-    // Voice loop: when the tutor stops speaking, start listening again.
-    LaunchedEffect(speaking, voice) {
-        if (voice && !speaking && phase == Phase.Speaking) { delay(250); listen() }
-        if (!speaking && phase == Phase.Speaking && !voice) phase = Phase.Idle
-    }
     LaunchedEffect(stt) {
         when (val st = stt) {
             is SttState.Result -> {
@@ -160,16 +184,19 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
                 app.stt.reset()
                 if (voice) send(text) else { input = text; phase = Phase.Idle }
             }
-            is SttState.Unavailable -> { error = t("err.sttUnavailable"); phase = Phase.Idle; voice = false; app.stt.reset() }
-            is SttState.Error -> { phase = Phase.Idle; app.stt.reset() }
+            is SttState.Unavailable -> { error = t(if (strict) "err.sttUnavailable" else "err.sttNone"); phase = Phase.Idle; app.stt.reset() }
+            is SttState.Error -> { error = t(if (st.noSpeech) "err.sttRetry" else "err.sttFailed"); phase = Phase.Idle; app.stt.reset() }
             else -> {}
         }
     }
     LaunchedEffect(messages.size, pending != null) { if (messages.isNotEmpty()) list.animateScrollToItem(messages.size + (if (pending != null) 1 else 0)) }
-    DisposableEffect(Unit) { onDispose { app.tts.stop(); app.stt.stop(); job?.cancel() } }
+    DisposableEffect(Unit) { onDispose { app.tts.stop(); app.stt.stop(); job?.cancel(); talkJob?.cancel() } }
 
+    var showFeedback by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().background(c.bg).imePadding()) {
         TopBar(scenario.title.loc(ui), { nav.pop() }) {
+            if (messages.any { it.fromUser }) IconBtn(Icons.Rounded.Insights, t("chat.feedback"), { app.tts.stop(); app.stt.stop(); showFeedback = true }, tint = c.ink2)
             IconBtn(if (voice) Icons.Rounded.Headset else Icons.Rounded.HeadsetOff, t("chat.voice"), {
                 voice = !voice
                 if (!voice) { app.stt.stop(); app.tts.stop(); phase = Phase.Idle }
@@ -183,9 +210,8 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
                     Text(t("chat.goal"), style = K.t.caption, color = c.ink3)
                     Text(scenario.goal.loc(ui), style = K.t.body, color = c.ink)
                     Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         AiBadge(t("ai.label"))
-                        Spacer(Modifier.width(8.dp))
                         if (state.settings.doubleCheck) AiBadge(t("chat.doublecheck"), verified = true)
                     }
                 }
@@ -193,7 +219,13 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
             itemsIndexed(messages, key = { i, _ -> i }) { i, m ->
                 Bubble(m, last = i == messages.lastIndex, onSuggestion = { if (voice) send(it) else input = it })
             }
-            if (pending != null) item { TypingBubble(pending.orEmpty()) }
+            if (pending != null || phase == Phase.Thinking) item {
+                Column {
+                    TypingBubble(pending.orEmpty())
+                    // First answer after app start also loads the model; say so instead of looking stuck.
+                    if (engine is EngineState.Loading) Text(t("chat.loadingModel"), style = K.t.caption, color = c.ink3, modifier = Modifier.padding(start = 6.dp, top = 6.dp))
+                }
+            }
         }
         AnimatedVisibility(error != null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(c.badSoft).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -204,13 +236,73 @@ fun ChatScreen(scenarioId: String, threadId: String?, startVoice: Boolean) {
         if (voice) VoiceOrb(phase, level, onTap = {
             when (phase) {
                 Phase.Listening -> app.stt.finish()
-                Phase.Speaking -> { app.tts.stop(); listen() }
+                Phase.Speaking -> listen()
                 Phase.Idle -> listen()
                 Phase.Thinking -> {}
             }
         }, partial = (stt as? SttState.Partial)?.text)
         else InputBar(input, { input = it }, busy = job?.isActive == true, listening = phase == Phase.Listening, level = level, target = target,
             onSend = { send(input) }, onMic = { if (phase == Phase.Listening) app.stt.finish() else listen() }, onStop = { job?.cancel(); pending = null; phase = Phase.Idle })
+    }
+    AnimatedVisibility(showFeedback, enter = fadeIn(Motion.quick()) + slideInVertically(Motion.offset) { it / 3 }, exit = fadeOut(Motion.quick()) + slideOutVertically(Motion.offset) { it / 3 }) {
+        FeedbackSheet(messages) { showFeedback = false }
+    }
+    }
+}
+
+/** What went wrong in this conversation (exactly the corrections shown) plus short AI advice on what to practise. */
+@Composable
+private fun FeedbackSheet(messages: List<ChatMsg>, onClose: () -> Unit) {
+    val app = KelimoApp.instance
+    val c = K.c
+    val t = LocalT.current
+    val fixes = messages.filter { it.fromUser && it.correction != null }
+    val tips = messages.filter { it.fromUser && it.tip != null }
+    val spoken = messages.count { it.fromUser }
+    var feedback by remember { mutableStateOf<app.kelimo.ai.Tutor.Feedback?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (fixes.isEmpty() || !app.ensureModel()) return@LaunchedEffect
+        loading = true
+        feedback = runCatching { app.tutor.conversationFeedback(app.learner(), fixes.map { it.text to it.correction!!.corrected }) }.getOrNull()
+        loading = false
+    }
+    BackHandler(onBack = onClose)
+    Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
+        TopBar(t("chat.feedback"), onClose)
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatBox("$spoken", t("fbk.messages"), c.accent, Modifier.weight(1f))
+                    StatBox("${fixes.size}", t("fbk.fixes"), c.warm, Modifier.weight(1f))
+                    StatBox("${tips.size}", t("fbk.tips"), c.good, Modifier.weight(1f))
+                }
+            }
+            if (fixes.isEmpty()) item {
+                KCard(Modifier.fillMaxWidth(), color = c.goodSoft) { Text(t("fbk.clean"), style = K.t.bodyStrong, color = c.good) }
+            }
+            if (loading || feedback != null) item {
+                KCard(Modifier.fillMaxWidth()) {
+                    AiBadge(t("ai.label"))
+                    Spacer(Modifier.height(8.dp))
+                    val f = feedback
+                    if (f == null) Text(t("voice.thinking"), style = K.t.body, color = c.ink3)
+                    else {
+                        Text(f.summary, style = K.t.body, color = c.ink)
+                        if (f.focus.isNotEmpty()) {
+                            Spacer(Modifier.height(10.dp))
+                            Text(t("fbk.focus"), style = K.t.caption, color = c.ink3)
+                            f.focus.forEach { Text("· $it", style = K.t.body, color = c.ink, modifier = Modifier.padding(top = 4.dp)) }
+                        }
+                    }
+                }
+            }
+            if (fixes.isNotEmpty()) item { SectionTitle(t("fbk.fixesTitle")) }
+            items(fixes.size) { i -> fixes[i].let { m -> CorrectionCard(m.text, m.correction!!) } }
+            if (tips.isNotEmpty()) item { SectionTitle(t("fbk.tipsTitle")) }
+            items(tips.size) { i -> TipCard(tips[i].tip!!) }
+        }
+        Box(Modifier.padding(20.dp)) { KButton(t("lesson.continue"), onClose, Modifier.fillMaxWidth()) }
     }
 }
 
@@ -239,6 +331,7 @@ private fun Bubble(m: ChatMsg, last: Boolean, onSuggestion: (String) -> Unit) {
             }
         }
         m.correction?.let { CorrectionCard(m.text, it) }
+        m.tip?.let { TipCard(it) }
         if (!m.fromUser && last && m.suggestions.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text(t("chat.suggest"), style = K.t.caption, color = c.ink3)
@@ -273,6 +366,23 @@ fun CorrectionCard(original: String, corr: Correction) {
             Spacer(Modifier.height(6.dp))
             Text(corr.explanation, style = K.t.caption, color = c.ink2)
         }
+    }
+}
+
+@Composable
+private fun TipCard(tip: Tip) {
+    val c = K.c
+    val t = LocalT.current
+    val app = KelimoApp.instance
+    Column(Modifier.padding(top = 6.dp).widthIn(max = 320.dp).clip(RoundedCornerShape(18.dp)).background(c.accentSoft).padding(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Lightbulb, null, tint = c.accent, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(t("chat.natural"), style = K.t.label, color = c.accent, modifier = Modifier.weight(1f))
+            IconBtn(Icons.AutoMirrored.Rounded.VolumeUp, "play", { app.tts.speak(tip.better) }, tint = c.accent, size = 30.dp)
+        }
+        Text(tip.better, style = K.t.bodyStrong, color = c.ink)
+        if (tip.why.isNotBlank()) Text(tip.why, style = K.t.caption, color = c.ink2, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -336,7 +446,7 @@ private fun VoiceOrb(phase: Phase, level: Float, onTap: () -> Unit, partial: Str
     val s by animateFloatAsState(scale, Motion.press(), label = "orbS")
     val color by animateColorAsState(when (phase) { Phase.Listening -> c.bad; Phase.Speaking -> c.good; Phase.Thinking -> c.warm; Phase.Idle -> c.accent }, Motion.quick(), label = "orbC")
     Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 18.dp, top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (partial != null) Text(partial, style = K.t.body, color = c.ink2, modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp))
+        if (partial != null) Text(partial, style = K.t.body, color = c.ink2, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp))
         Box(contentAlignment = Alignment.Center) {
             Box(Modifier.size(110.dp).graphicsLayer { scaleX = s; scaleY = s }.clip(CircleShape).background(color.copy(alpha = 0.18f)))
             Box(Modifier.size(78.dp).clip(CircleShape).background(color).pressable(scaleTo = 0.9f, onClick = onTap), contentAlignment = Alignment.Center) {

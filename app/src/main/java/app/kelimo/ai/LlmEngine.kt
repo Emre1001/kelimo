@@ -58,6 +58,7 @@ class LlmEngine(private val context: Context, private val files: ModelFiles) {
     private var engine: Engine? = null
     private var loadedKey: String? = null
     private var jsonModeWorks = true
+    private var loadedModel: InstalledModel? = null
 
     private val _state = MutableStateFlow<EngineState>(EngineState.NoModel)
     val state: StateFlow<EngineState> = _state
@@ -83,17 +84,9 @@ class LlmEngine(private val context: Context, private val files: ModelFiles) {
             var lastError: Throwable? = null
             for (b in tryOrder) {
                 try {
-                    val e = Engine(
-                        EngineConfig(
-                            modelPath = path,
-                            backend = if (b == PrefBackend.GPU) Backend.GPU() else Backend.CPU(),
-                            maxNumTokens = 4096,
-                            cacheDir = context.cacheDir.path,
-                        )
-                    )
-                    e.initialize()
-                    engine = e
+                    engine = createEngine(path, b)
                     loadedKey = "${model.fileName}|$backend"
+                    loadedModel = model
                     jsonModeWorks = true
                     _state.value = EngineState.Ready(model.id, b)
                     return@withContext
@@ -106,17 +99,50 @@ class LlmEngine(private val context: Context, private val files: ModelFiles) {
         }
     }
 
+    private fun createEngine(path: String, b: PrefBackend): Engine = Engine(
+        EngineConfig(
+            modelPath = path,
+            backend = if (b == PrefBackend.GPU) Backend.GPU() else Backend.CPU(),
+            maxNumTokens = 4096,
+            cacheDir = context.cacheDir.path,
+        )
+    ).also { it.initialize() }
+
     suspend fun unload() = mutex.withLock { withContext(Dispatchers.IO) { closeEngine(); _state.value = EngineState.Idle } }
 
     private fun closeEngine() {
         runCatching { engine?.close() }
         engine = null
         loadedKey = null
+        loadedModel = null
     }
 
-    /** Streams the growing answer text to [onText]; returns the final text. */
+    /**
+     * Streams the growing answer text to [onText]; returns the final text.
+     * Some GPUs initialise fine but fail on the first generation (e.g. missing OpenCL): then the
+     * engine is rebuilt on the CPU once and the request repeated, instead of failing every time.
+     */
     suspend fun generate(req: LlmRequest, onText: (String) -> Unit = {}): String = mutex.withLock {
-        withContext(Dispatchers.Default) { run(req, onText, useSchema = req.schema != null && jsonModeWorks) }
+        withContext(Dispatchers.Default) {
+            try {
+                run(req, onText, useSchema = req.schema != null && jsonModeWorks)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (t: Throwable) {
+                val st = _state.value
+                val m = loadedModel
+                if (st !is EngineState.Ready || st.backend != PrefBackend.GPU || m == null) throw t
+                Log.w("Llm", "GPU generation failed, switching to CPU", t)
+                withContext(Dispatchers.IO) {
+                    closeEngine()
+                    engine = createEngine(files.file(m).path, PrefBackend.CPU)
+                    loadedKey = "${m.fileName}|GPU" // keep: the user's setting is still GPU, the device just can't do it
+                    loadedModel = m
+                    _state.value = EngineState.Ready(m.id, PrefBackend.CPU)
+                }
+                run(req, onText, useSchema = req.schema != null && jsonModeWorks)
+            }
+        }
     }
 
     private suspend fun run(req: LlmRequest, onText: (String) -> Unit, useSchema: Boolean): String {
@@ -126,6 +152,7 @@ class LlmEngine(private val context: Context, private val files: ModelFiles) {
                 systemInstruction = Contents.of(req.system),
                 initialMessages = req.history.takeLast(16).map { if (it.user) Message.user(it.text) else Message.model(it.text) },
                 samplerConfig = SamplerConfig(topK = req.topK, topP = req.topP, temperature = req.temperature, seed = 7),
+                enableResponseFormat = useSchema,
             )
         )
         val sb = StringBuilder()
@@ -143,11 +170,16 @@ class LlmEngine(private val context: Context, private val files: ModelFiles) {
             throw c
         } catch (t: Throwable) {
             if (useSchema && sb.isEmpty()) {
-                // Model or runtime without constrained decoding: fall back to prompt-only JSON.
-                Log.w("Llm", "json mode unsupported, falling back", t)
-                jsonModeWorks = false
+                // Maybe the model or runtime lacks constrained decoding: try prompt-only JSON. Only if that
+                // works is JSON mode switched off; otherwise the failure had another cause (e.g. backend).
                 runCatching { conv.close() }
-                return run(req, onText, useSchema = false)
+                val plain = runCatching { run(req, onText, useSchema = false) }
+                plain.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                if (plain.isSuccess) {
+                    Log.w("Llm", "json mode unsupported, using prompt-only JSON", t)
+                    jsonModeWorks = false
+                    return plain.getOrThrow()
+                }
             }
             throw t
         } finally {
@@ -164,6 +196,7 @@ class LlmEngine(private val context: Context, private val files: ModelFiles) {
         repeat(2) { attempt ->
             val r = if (attempt == 0) req else req.copy(temperature = minOf(req.temperature, 0.2), user = req.user + "\n\nAnswer with ONE valid JSON object only.")
             val raw = try { generate(r, onText) } catch (c: CancellationException) { throw c } catch (t: Throwable) { Log.w("Llm", "gen failed", t); null }
+            Log.d("Llm", "attempt $attempt json=$jsonModeWorks raw=${raw?.take(300)}")
             raw?.let(::extractJson)?.let { return it }
         }
         return null

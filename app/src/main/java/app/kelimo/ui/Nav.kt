@@ -54,6 +54,8 @@ sealed interface Route {
     data object Stories : Route
     data object AiLessons : Route
     data object Placement : Route
+    data object Voices : Route
+    data object Streak : Route
 }
 
 @Stable

@@ -206,3 +206,29 @@ class StringsTest {
         assertTrue(app.kelimo.ui.Strings.tr.values.none { it.isBlank() })
     }
 }
+
+class UpdaterTest {
+    @Test fun versionCompare() {
+        assertTrue(app.kelimo.update.Updater.newer("1.1.0", "1.0.0"))
+        assertTrue(app.kelimo.update.Updater.newer("v1.10.0", "1.9.9"))
+        assertFalse(app.kelimo.update.Updater.newer("1.0.0", "1.0.0"))
+        assertFalse(app.kelimo.update.Updater.newer("1.0", "1.0.1"))
+    }
+
+    @Test fun parsesReleaseAndRejectsForeignHosts() {
+        val ok = """{"tag_name":"v1.2.0","body":"- Neu","assets":[{"name":"kelimo.apk","size":123,"browser_download_url":"https://github.com/Emre1001/kelimo/releases/download/v1.2.0/kelimo.apk"}]}"""
+        val r = app.kelimo.update.Updater.parse(ok)!!
+        assertEquals("1.2.0", r.version); assertEquals(123L, r.sizeBytes)
+        val evil = ok.replace("https://github.com/", "https://evil.example/")
+        assertNull(app.kelimo.update.Updater.parse(evil))
+        assertNull(app.kelimo.update.Updater.parse("""{"tag_name":"v2","assets":[]}"""))
+    }
+}
+
+class StreakTest {
+    @Test fun longestStreak() {
+        val s = Stats(xpByDay = mapOf("2026-01-01" to 5, "2026-01-02" to 5, "2026-01-03" to 5, "2026-01-10" to 5), frozenDays = setOf("2026-01-04"))
+        assertEquals(4, s.longestStreak())
+        assertEquals(0, Stats().longestStreak())
+    }
+}
